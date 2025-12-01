@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    
+    <!-- Enable Razor Class Library features -->
+    <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+    
+    <!-- This is a packable library -->
+    <IsPackable>true</IsPackable>
+    
+    <!-- NuGet Package Metadata -->
+    <PackageId>Manifesto.RazorKit</PackageId>
+    <Version>0.0.1</Version>
+    <Authors>Manifesto Digital</Authors>
+    <Company>Manifesto Digital</Company>
+    <Description>A component preview and development tool for ASP.NET Core Razor components. Provides an interactive UI for developing, testing, and documenting reusable Razor components, inspired by Storybook.</Description>
+    <PackageTags>razor;components;storybook;preview;development;aspnetcore;manifesto</PackageTags>
+    <PackageProjectUrl>https://github.com/manifesto-digital/razorkit</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/manifesto-digital/razorkit</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    
+    <!-- Generate symbols package for debugging -->
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    
+    <!-- Suppress warnings -->
+    <NoWarn>$(NoWarn);CS8604</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>

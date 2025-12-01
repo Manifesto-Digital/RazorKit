@@ -1,0 +1,1570 @@
+@page "/razorkit/{componentName?}/{storyName?}"
+@using Manifesto.RazorKit.Services
+@using Manifesto.RazorKit.Models
+@using System.Reflection
+@using System.Text.Json
+@using Microsoft.AspNetCore.Html
+@inject ComponentDiscoveryService ComponentDiscovery
+@inject ComponentPropertyService PropertyService
+@inject ComponentStoryService StoryService
+@model dynamic
+
+@functions {
+    private string SerializePropertyValue(object? value)
+    {
+        if (value == null)
+            return "null";
+            
+        // Special handling for IHtmlContent - convert to HTML string
+        if (value is IHtmlContent htmlContent)
+        {
+            using var writer = new StringWriter();
+            htmlContent.WriteTo(writer, System.Text.Encodings.Web.HtmlEncoder.Default);
+            return JsonSerializer.Serialize(writer.ToString());
+        }
+        
+        return JsonSerializer.Serialize(value);
+    }
+}
+
+@{
+    ViewBag.Title = "RazorKit";
+    var components = ComponentDiscovery.DiscoverComponents();
+    var componentName = ViewContext.RouteData.Values["componentName"]?.ToString();
+    var storyName = ViewContext.RouteData.Values["storyName"]?.ToString();
+
+    if (string.IsNullOrEmpty(componentName) && components.Any())
+    {
+        var firstComponent = components.First();
+        var firstComponentStories = StoryService.GetStoriesForComponent(firstComponent.Name);
+        var firstStory = firstComponentStories.FirstOrDefault();
+
+        var redirectUrl = firstStory != null
+            ? $"/razorkit/{firstComponent.Name.ToLower()}/{firstStory.Name.ToLower()}"
+            : $"/razorkit/{firstComponent.Name.ToLower()}";
+
+        Response.Redirect(redirectUrl);
+        return;
+    }
+
+    var selectedComponent = components.FirstOrDefault(c => c.Name.Equals(componentName, StringComparison.OrdinalIgnoreCase));
+
+    ComponentPropertyInfo[] properties = Array.Empty<ComponentPropertyInfo>();
+    Dictionary<string, object> defaultValues = new Dictionary<string, object>();
+    List<ComponentStory> stories = new List<ComponentStory>();
+    ComponentStory? selectedStory = null;
+    Type? propsType = null;
+
+    if (selectedComponent != null)
+    {
+        stories = StoryService.GetStoriesForComponent(selectedComponent.Name);
+
+        if (string.IsNullOrEmpty(storyName) && stories.Any())
+        {
+            var firstStory = stories.First();
+            var redirectUrl = $"/razorkit/{selectedComponent.Name.ToLower()}/{firstStory.Name.ToLower()}";
+            Response.Redirect(redirectUrl);
+            return;
+        }
+
+        selectedStory = stories.FirstOrDefault(s => s.Name.Equals(storyName, StringComparison.OrdinalIgnoreCase));
+
+        var assemblies = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location));
+
+        foreach (var assembly in assemblies)
+        {
+            try
+            {
+                propsType = assembly.GetTypes()
+                    .FirstOrDefault(t => t.Name.Equals($"{selectedComponent.Name}Props", StringComparison.OrdinalIgnoreCase));
+
+                if (propsType != null)
+                    break;
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+        }
+
+        if (propsType != null)
+        {
+            properties = PropertyService.GetComponentProperties(propsType).ToArray();
+
+            if (selectedStory != null)
+            {
+                defaultValues = selectedStory.Properties.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+                var componentDefaults = PropertyService.GetDefaultValues(propsType);
+                foreach (var prop in properties)
+                {
+                    if (!defaultValues.ContainsKey(prop.Name))
+                    {
+                        defaultValues[prop.Name] = componentDefaults.GetValueOrDefault(prop.Name) ?? prop.DefaultValue ?? new object();
+                    }
+                }
+            }
+            else
+            {
+                defaultValues = PropertyService.GetDefaultValues(propsType);
+            }
+        }
+    }
+
+    string initialIframeUrl = "";
+    if (selectedComponent != null)
+    {
+        initialIframeUrl = $"/razorkit-preview/preview/{selectedComponent.Name.ToLower()}/{selectedStory?.Name.ToLower() ?? "default"}";
+    }
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewBag.Title</title>
+    <link rel="stylesheet" href="/css/main.css" />
+    <script src="https://unpkg.com/axe-core@4.8.2/axe.min.js"></script>
+    <style>
+        .razorkit-page {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f8fafc;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+            .razorkit-page .razorkit-layout {
+                display: grid;
+                grid-template-columns: 280px 1fr;
+                grid-template-rows: 60px 1fr;
+                grid-template-areas:
+                    "header header"
+                    "sidebar content";
+                height: 100vh;
+            }
+
+            .razorkit-page .razorkit-header {
+                grid-area: header;
+                background: #fff;
+                border-bottom: 1px solid #e2e8f0;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0 1.5rem;
+                box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+                z-index: 10;
+            }
+
+            .razorkit-page .razorkit-sidebar {
+                grid-area: sidebar;
+                background: #fff;
+                border-right: 1px solid #e2e8f0;
+                overflow-y: auto;
+                padding: 1rem 0;
+            }
+
+            .razorkit-page .razorkit-content {
+                grid-area: content;
+                display: grid;
+                grid-template-columns: 1fr 320px;
+                grid-template-areas: "preview controls" "bottom bottom";
+                overflow: hidden;
+            }
+
+            /* Layout Modes */
+
+            /* Bottom Layout */
+            .razorkit-page.layout-bottom {
+                grid-template-columns: 280px 1fr;
+                grid-template-rows: 60px 1fr 280px;
+                grid-template-areas:
+                    "header header"
+                    "sidebar content"
+                    "controls controls";
+            }
+
+                .razorkit-page.layout-bottom .razorkit-controls {
+                    grid-area: bottom;
+                    border-left: none;
+                    border-top: 1px solid #e2e8f0;
+                    max-height: 280px;
+                }
+
+            /* Hidden Layout - Hide Controls Panel */
+            .razorkit-page.layout-hidden .razorkit-content {
+                grid-template-columns: 1fr;
+                grid-template-areas: "preview";
+            }
+
+            .razorkit-page.layout-bottom .razorkit-content {
+                grid-template-columns: 1fr;
+                grid-template-areas: "preview" "bottom";
+            }
+
+            .razorkit-page.layout-hidden .razorkit-controls {
+                display: none;
+            }
+
+
+
+            .razorkit-page .razorkit-preview {
+                grid-area: preview;
+                background: #fff;
+                overflow-y: auto;
+                position: relative;
+            }
+
+            .razorkit-page .razorkit-controls {
+                grid-area: controls;
+                background: #f8fafc;
+                border-left: 1px solid #e2e8f0;
+                overflow-y: auto;
+                padding: 1.5rem;
+            }
+
+            /* Layout Controls */
+            .razorkit-page .razorkit-layout-controls {
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .razorkit-page .razorkit-layout-btn {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.75rem 1rem;
+                border: 1px solid #d1d5db;
+                background: #fff;
+                border-radius: 0.5rem;
+                cursor: pointer;
+                color: #6b7280;
+                transition: all 0.2s;
+                font-size: 0.875rem;
+            }
+
+                .razorkit-page .razorkit-layout-btn:hover {
+                    background: #f3f4f6;
+                    color: #374151;
+                    border-color: #9ca3af;
+                }
+
+                .razorkit-page .razorkit-layout-btn.active {
+                    background: #3b82f6;
+                    color: #fff;
+                    border-color: #3b82f6;
+                }
+
+                .razorkit-page .razorkit-layout-btn svg {
+                    flex-shrink: 0;
+                }
+
+            /* Show Controls Button */
+            .razorkit-page .razorkit-show-controls-btn {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.5rem 1rem;
+                background: #3b82f6;
+                color: white;
+                border: none;
+                border-radius: 0.375rem;
+                cursor: pointer;
+                font-size: 0.875rem;
+                transition: background 0.2s;
+            }
+
+                .razorkit-page .razorkit-show-controls-btn:hover {
+                    background: #2563eb;
+                }
+
+            /* Header Actions */
+            .razorkit-page .razorkit-header-actions {
+                display: flex;
+                align-items: center;
+                gap: 1rem;
+            }
+
+            .razorkit-page .razorkit-open-window-btn {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.5rem 1rem;
+                background: #f3f4f6;
+                color: #374151;
+                border: 1px solid #d1d5db;
+                border-radius: 0.375rem;
+                cursor: pointer;
+                font-size: 0.875rem;
+                transition: all 0.2s;
+            }
+
+                .razorkit-page .razorkit-open-window-btn:hover {
+                    background: #e5e7eb;
+                    border-color: #9ca3af;
+                }
+
+                .razorkit-page .razorkit-open-window-btn:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+
+            .razorkit-page .razorkit-preview-area {
+                padding: 2rem;
+                min-height: calc(100vh - 120px);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: radial-gradient(circle at 1px 1px, rgba(0,0,0,.15) 1px, transparent 0);
+                background-size: 20px 20px;
+            }
+
+            .razorkit-page .razorkit-preview-container {
+                background: #fff;
+                border-radius: 8px;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+                border: 1px solid #e2e8f0;
+            }
+
+            .razorkit-page .razorkit-component-list {
+                list-style: none;
+                margin: 0;
+                padding: 0;
+            }
+
+            .razorkit-page .razorkit-component-group {
+                margin-bottom: 1rem;
+            }
+
+            .razorkit-page .razorkit-component-group-title {
+                font-size: 0.75rem;
+                font-weight: 600;
+                text-transform: uppercase;
+                color: #64748b;
+                padding: 0.5rem 1rem;
+                letter-spacing: 0.05em;
+            }
+
+            .razorkit-page .razorkit-component-section {
+                margin-bottom: 0.5rem;
+            }
+
+            .razorkit-page .razorkit-component-name {
+                display: flex;
+                align-items: center;
+                padding: 0.5rem 1rem;
+                color: #374151;
+                font-weight: 500;
+                font-size: 0.875rem;
+                cursor: pointer;
+                transition: all 0.15s ease;
+                user-select: none;
+            }
+
+                .razorkit-page .razorkit-component-name:hover {
+                    background-color: #f1f5f9;
+                    color: #1e40af;
+                }
+
+                .razorkit-page .razorkit-component-name.active {
+                    background-color: #e0f2fe;
+                    color: #0369a1;
+                    font-weight: 600;
+                }
+
+            .razorkit-page .razorkit-toggle-icon {
+                margin-right: 0.5rem;
+                font-size: 0.75rem;
+                width: 12px;
+                display: inline-block;
+                transition: transform 0.15s ease;
+            }
+
+            .razorkit-page .razorkit-story-list {
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height 0.3s ease;
+            }
+
+                .razorkit-page .razorkit-story-list.expanded {
+                    max-height: 500px;
+                }
+
+            .razorkit-page .razorkit-story-item {
+                display: block;
+                padding: 0.375rem 1rem 0.375rem 2.5rem;
+                color: #6b7280;
+                text-decoration: none;
+                font-size: 0.8125rem;
+                transition: all 0.15s ease;
+                border-left: 2px solid transparent;
+            }
+
+                .razorkit-page .razorkit-story-item:hover {
+                    background-color: #f8fafc;
+                    color: #374151;
+                    text-decoration: none;
+                    border-left-color: #e5e7eb;
+                }
+
+                .razorkit-page .razorkit-story-item.active {
+                    background-color: #dbeafe;
+                    color: #1e40af;
+                    font-weight: 500;
+                    border-left-color: #3b82f6;
+                }
+
+            .razorkit-page .razorkit-control-section {
+                margin-bottom: 1.5rem;
+            }
+
+            .razorkit-page .razorkit-control-section-title {
+                font-size: 0.875rem;
+                font-weight: 600;
+                color: #374151;
+                margin-bottom: 0.75rem;
+                text-transform: uppercase;
+                letter-spacing: 0.025em;
+            }
+
+            .razorkit-page .razorkit-form-group {
+                margin-bottom: 1rem;
+            }
+
+            .razorkit-page .razorkit-form-label {
+                display: block;
+                font-size: 0.875rem;
+                font-weight: 500;
+                color: #374151;
+                margin-bottom: 0.25rem;
+            }
+
+            .razorkit-page .razorkit-form-control {
+                width: 100%;
+                padding: 0.5rem 0.75rem;
+                border: 1px solid #d1d5db;
+                border-radius: 0.375rem;
+                font-size: 0.875rem;
+                transition: border-color 0.15s ease-in-out;
+            }
+
+                .razorkit-page .razorkit-form-control:focus {
+                    outline: none;
+                    border-color: #3b82f6;
+                    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+                }
+
+            .razorkit-page .razorkit-checkbox-control {
+                width: auto;
+                margin-right: 0.5rem;
+            }
+
+            .razorkit-page .razorkit-checkbox-label {
+                display: flex;
+                align-items: center;
+                cursor: pointer;
+            }
+
+            .razorkit-page .razorkit-reset-button {
+                background: #6b7280;
+                color: white;
+                border: none;
+                padding: 0.5rem 1rem;
+                border-radius: 0.375rem;
+                font-size: 0.875rem;
+                font-weight: 500;
+                cursor: pointer;
+                transition: background-color 0.15s ease;
+            }
+
+                .razorkit-page .razorkit-reset-button:hover {
+                    background: #4b5563;
+                }
+
+            .razorkit-page .razorkit-logo {
+                font-size: 1.25rem;
+                font-weight: 700;
+                color: #1f2937;
+            }
+
+            .razorkit-page .razorkit-loading {
+                opacity: 0.5;
+                pointer-events: none;
+            }
+
+            .razorkit-page .razorkit-component-code {
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 0.375rem;
+                padding: 1rem;
+                margin-top: 1rem;
+                font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+                font-size: 0.75rem;
+                color: #374151;
+                overflow-x: auto;
+            }
+
+
+
+            /* Accessibility Panel Styles */
+            .razorkit-page .razorkit-a11y-panel {
+                border-top: 1px solid #e2e8f0;
+                background: #f8fafc;
+            }
+
+            .razorkit-page .razorkit-a11y-header {
+                padding: 0.75rem 1rem;
+                background: #fff;
+                border-bottom: 1px solid #e2e8f0;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                font-weight: 600;
+                font-size: 0.875rem;
+                color: #374151;
+            }
+
+                .razorkit-page .razorkit-a11y-header:hover {
+                    background: #f9fafb;
+                }
+
+            .razorkit-page .razorkit-a11y-content {
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height 0.3s ease;
+            }
+
+                .razorkit-page .razorkit-a11y-content.expanded {
+                    max-height: 400px;
+                }
+
+            .razorkit-page .razorkit-a11y-summary {
+                padding: 1rem;
+                display: flex;
+                gap: 1rem;
+                align-items: center;
+            }
+
+            .razorkit-page .razorkit-a11y-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.25rem;
+                padding: 0.25rem 0.5rem;
+                border-radius: 0.375rem;
+                font-size: 0.75rem;
+                font-weight: 500;
+            }
+
+                .razorkit-page .razorkit-a11y-badge.pass {
+                    background: #d1fae5;
+                    color: #065f46;
+                }
+
+                .razorkit-page .razorkit-a11y-badge.violations {
+                    background: #fee2e2;
+                    color: #991b1b;
+                }
+
+                .razorkit-page .razorkit-a11y-badge.incomplete {
+                    background: #fef3c7;
+                    color: #92400e;
+                }
+
+            .razorkit-page .razorkit-a11y-issues {
+                max-height: 250px;
+                overflow-y: auto;
+                padding: 0 1rem 1rem;
+            }
+
+            .razorkit-page .razorkit-a11y-issue {
+                background: #fff;
+                border: 1px solid #e5e7eb;
+                border-radius: 0.375rem;
+                margin-bottom: 0.5rem;
+                overflow: hidden;
+            }
+
+            .razorkit-page .razorkit-a11y-issue-header {
+                padding: 0.75rem;
+                background: #f9fafb;
+                border-bottom: 1px solid #e5e7eb;
+                cursor: pointer;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+                .razorkit-page .razorkit-a11y-issue-header:hover {
+                    background: #f3f4f6;
+                }
+
+            .razorkit-page .razorkit-a11y-issue-title {
+                font-size: 0.875rem;
+                font-weight: 500;
+                color: #374151;
+            }
+
+            .razorkit-page .razorkit-a11y-issue-impact {
+                font-size: 0.75rem;
+                padding: 0.125rem 0.375rem;
+                border-radius: 0.25rem;
+                font-weight: 500;
+            }
+
+                .razorkit-page .razorkit-a11y-issue-impact.critical {
+                    background: #fecaca;
+                    color: #991b1b;
+                }
+
+                .razorkit-page .razorkit-a11y-issue-impact.serious {
+                    background: #fed7aa;
+                    color: #9a3412;
+                }
+
+                .razorkit-page .razorkit-a11y-issue-impact.moderate {
+                    background: #fef3c7;
+                    color: #92400e;
+                }
+
+                .razorkit-page .razorkit-a11y-issue-impact.minor {
+                    background: #dbeafe;
+                    color: #1e40af;
+                }
+
+            .razorkit-page .razorkit-a11y-issue-details {
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height 0.3s ease;
+            }
+
+                .razorkit-page .razorkit-a11y-issue-details.expanded {
+                    max-height: unset;
+                }
+
+            .razorkit-page .razorkit-a11y-issue-body {
+                padding: 0.75rem;
+                font-size: 0.8125rem;
+                color: #6b7280;
+            }
+
+            .razorkit-page .razorkit-a11y-run-button {
+                background: #3b82f6;
+                color: white;
+                border: none;
+                padding: 0.5rem 1rem;
+                border-radius: 0.375rem;
+                font-size: 0.875rem;
+                font-weight: 500;
+                cursor: pointer;
+                transition: background-color 0.15s ease;
+            }
+
+                .razorkit-page .razorkit-a11y-run-button:hover {
+                    background: #2563eb;
+                }
+
+                .razorkit-page .razorkit-a11y-run-button:disabled {
+                    background: #9ca3af;
+                    cursor: not-allowed;
+                }
+
+            /* Viewport Controls Styles */
+            .razorkit-page .razorkit-viewport-controls {
+                display: flex;
+                align-items: center;
+                gap: 1rem;
+            }
+
+            .razorkit-page .razorkit-viewport-select {
+                padding: 0.375rem 0.75rem;
+                border: 1px solid #d1d5db;
+                border-radius: 0.375rem;
+                font-size: 0.875rem;
+                background: white;
+                cursor: pointer;
+                min-width: 160px;
+            }
+
+                .razorkit-page .razorkit-viewport-select:focus {
+                    outline: none;
+                    border-color: #3b82f6;
+                    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+                }
+
+            .razorkit-page .razorkit-viewport-info {
+                font-size: 0.875rem;
+                color: #6b7280;
+                font-weight: 500;
+                padding: 0.375rem 0.75rem;
+                background: #f9fafb;
+                border-radius: 0.375rem;
+                border: 1px solid #e5e7eb;
+                min-width: 120px;
+                text-align: center;
+            }
+
+            /* Viewport Size Classes - Applied to iframe */
+            .razorkit-page .razorkit-preview.viewport-mobile #preview-iframe {
+                width: 375px;
+                margin: 0 auto;
+                display: block;
+                border: 2px solid #e5e7eb;
+            }
+
+            .razorkit-page .razorkit-preview.viewport-tablet #preview-iframe {
+                width: 768px;
+                margin: 0 auto;
+                display: block;
+                border: 2px solid #e5e7eb;
+            }
+
+            .razorkit-page .razorkit-preview.viewport-laptop #preview-iframe {
+                width: 1024px;
+                margin: 0 auto;
+                display: block;
+                border: 2px solid #e5e7eb;
+            }
+
+            .razorkit-page .razorkit-preview.viewport-desktop #preview-iframe {
+                width: 1440px;
+                margin: 0 auto;
+                display: block;
+                border: 2px solid #e5e7eb;
+            }
+
+            .razorkit-page .razorkit-preview.viewport-large #preview-iframe {
+                width: 1920px;
+                margin: 0 auto;
+                display: block;
+                border: 2px solid #e5e7eb;
+            }
+
+            /* Responsive viewport styling */
+            .razorkit-page .razorkit-preview.viewport-responsive #preview-iframe {
+                width: 100%;
+                border: none;
+            }
+
+            /* In responsive mode, minimize container padding to maximize iframe width */
+            .razorkit-page .razorkit-preview.viewport-responsive .razorkit-preview-container {
+                margin: 0.5rem;
+            }
+
+            /* Make component preview take full width in responsive mode */
+            .razorkit-page .razorkit-preview.viewport-responsive #component-preview {
+                width: 100%;
+                flex-grow: 1;
+            }
+
+            /* Iframe container styling */
+            .razorkit-page .razorkit-preview-container {
+                overflow-x: auto;
+                padding: 1rem;
+            }
+
+            /* Default iframe styling */
+            .razorkit-page #preview-iframe {
+                width: 100%;
+                display: block;
+            }
+    </style>
+</head>
+<body class="razorkit-page">
+    <div class="razorkit-layout">
+        <div class="razorkit-header">
+            <div class="razorkit-logo">📖 RazorKit</div>
+
+            <button class="razorkit-show-controls-btn" onclick="toggleSidebarLayout('side')" title="Show Controls Panel" style="display: none;">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <rect x="1" y="1" width="10" height="14" stroke="currentColor" stroke-width="1" fill="none" />
+                    <rect x="12" y="1" width="3" height="14" fill="currentColor" />
+                </svg>
+                <span>Show Controls</span>
+            </button>
+
+            <div class="razorkit-header-actions">
+                <button class="razorkit-open-window-btn" onclick="openComponentInNewWindow()" title="Open Component in New Window">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1ZM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Z" />
+                        <path d="M5.5 5.5A.5.5 0 0 1 6 5h2a.5.5 0 0 1 0 1H6.707l2.647 2.646a.5.5 0 0 1-.708.708L6 6.707V8a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5Z" />
+                        <path d="M10 2a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0V2.707l-2.146 2.147a.5.5 0 0 1-.708-.708L12.293 2H10.5A.5.5 0 0 1 10 2Z" />
+                    </svg>
+                    <span>Open</span>
+                </button>
+            </div>
+
+            <div class="razorkit-viewport-controls">
+                <select id="viewport-selector" class="razorkit-viewport-select" onchange="changeViewport()">
+                    <option value="responsive">📱 Responsive</option>
+                    <option value="mobile">📱 Mobile (375px)</option>
+                    <option value="tablet">📱 Tablet (768px)</option>
+                    <option value="laptop">💻 Laptop (1024px)</option>
+                    <option value="desktop">🖥️ Desktop (1440px)</option>
+                    <option value="large">🖥️ Large (1920px)</option>
+                </select>
+
+                <div class="razorkit-viewport-info" id="viewport-info">
+                    <span id="viewport-size">Responsive</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="razorkit-sidebar">
+            @if (components.Any())
+            {
+                <div class="razorkit-component-list">
+                    @foreach (var group in components.GroupBy(c => c.AtomicLevel))
+                    {
+                        <div class="razorkit-component-group">
+                            <div class="razorkit-component-group-title">@group.Key</div>
+                            @foreach (var component in group.OrderBy(c => c.Name))
+                            {
+                                var componentStories = StoryService.GetStoriesForComponent(component.Name);
+                                var isComponentSelected = selectedComponent?.Name == component.Name;
+
+                                <div class="razorkit-component-section">
+                                    <!-- Component Name -->
+                                    <div class="razorkit-component-name @(isComponentSelected ? "active" : "")"
+                                         onclick="toggleStories('@component.Name.ToLower()')">
+                                        <span class="razorkit-toggle-icon">@(isComponentSelected ? "▼" : "▶")</span>
+                                        @component.Name
+                                    </div>
+
+                                    <!-- Stories List -->
+                                    <div class="razorkit-story-list @(isComponentSelected ? "expanded" : "")" id="stories-@component.Name.ToLower()">
+                                        @foreach (var story in componentStories)
+                                        {
+                                            <a href="/razorkit/@component.Name.ToLower()/@story.Name.ToLower()"
+                                               class="razorkit-story-item @(selectedStory?.Name == story.Name ? "active" : "")"
+                                               title="@story.Description">
+                                                @story.DisplayName
+                                            </a>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- Main Content -->
+        <div class="razorkit-content">
+            <div class="razorkit-preview">
+                @if (selectedComponent != null)
+                {
+                    @if (selectedStory != null)
+                    {
+                        <div style="padding: 1rem 2rem; border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
+                            <h2 style="margin: 0 0 0.5rem 0; font-size: 1.25rem; font-weight: 600; color: #1f2937;">
+                                @selectedComponent.Name / @selectedStory.DisplayName
+                            </h2>
+                            @if (!string.IsNullOrEmpty(selectedStory.Description))
+                            {
+                                <p style="margin: 0; color: #6b7280; font-size: 0.875rem;">@selectedStory.Description</p>
+                            }
+                        </div>
+                    }
+
+                    <div class="razorkit-preview-area">
+                        <div class="razorkit-preview-container" id="component-preview">
+                            @if (selectedComponent != null)
+                            {
+                                <iframe id="preview-iframe"
+                                        name="preview-iframe"
+                                        src="@initialIframeUrl"
+                                        frameborder="0"
+                                        style="height: 600px; border: none; background: white;">
+                                </iframe>
+                            }
+                            else
+                            {
+                                <div class="text-gray-500 text-center">
+                                    <p>Select a component from the sidebar to view it</p>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="razorkit-preview-area">
+                        <div class="razorkit-preview-container">
+                            <div class="text-gray-500 text-center">
+                                <p>Select a component from the sidebar to view it</p>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="razorkit-controls">
+                <div class="razorkit-control-section">
+                    <div class="razorkit-control-section-title">Layout</div>
+                    <div class="razorkit-layout-controls">
+                        <button onclick="toggleSidebarLayout('side')" title="Side Layout" class="razorkit-layout-btn active" id="layout-side">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <rect x="1" y="1" width="5" height="14" fill="currentColor" />
+                                <rect x="7" y="1" width="8" height="14" stroke="currentColor" stroke-width="1" fill="none" />
+                            </svg>
+                            <span>Side</span>
+                        </button>
+                        <button onclick="toggleSidebarLayout('bottom')" title="Bottom Layout" class="razorkit-layout-btn" id="layout-bottom">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <rect x="1" y="1" width="14" height="8" stroke="currentColor" stroke-width="1" fill="none" />
+                                <rect x="1" y="10" width="14" height="5" fill="currentColor" />
+                            </svg>
+                            <span>Bottom</span>
+                        </button>
+                        <button onclick="toggleSidebarLayout('hidden')" title="Hide Controls Panel" class="razorkit-layout-btn" id="layout-hidden">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <rect x="1" y="1" width="14" height="14" stroke="currentColor" stroke-width="1" fill="none" />
+                                <line x1="5" y1="5" x2="11" y2="11" stroke="currentColor" stroke-width="2" />
+                                <line x1="11" y1="5" x2="5" y2="11" stroke="currentColor" stroke-width="2" />
+                            </svg>
+                            <span>Hide</span>
+                        </button>
+                    </div>
+                </div>
+
+                @if (selectedComponent != null && properties.Any())
+                {
+                    <div class="razorkit-control-section">
+                        <div class="razorkit-control-section-title">Properties</div>
+
+                        <form id="component-form">
+
+                            <input type="hidden" name="componentName" value="@selectedComponent.Name" />
+                            <input type="hidden" name="storyName" value="@(selectedStory?.Name ?? "")" />
+
+                            @foreach (var prop in properties)
+                            {
+                                <div class="razorkit-form-group">
+                                    <label class="razorkit-form-label" for="@prop.Name">
+                                        @prop.DisplayName
+                                        @if (!string.IsNullOrEmpty(prop.Description))
+                                        {
+                                            <span class="text-xs text-gray-500">(@prop.Description)</span>
+                                        }
+                                    </label>
+
+                                    @if (prop.Type == typeof(bool) || prop.Type == typeof(bool?))
+                                    {
+                                        <label class="razorkit-checkbox-label">
+                                            <input type="checkbox"
+                                                   class="razorkit-checkbox-control"
+                                                   name="@prop.Name"
+                                                   value="true"
+                                                   @(Convert.ToBoolean(defaultValues.GetValueOrDefault(prop.Name, false)) ? "checked" : "") />
+                                            <input type="hidden" name="@prop.Name" value="false" />
+                                            <span>@prop.DisplayName</span>
+                                        </label>
+                                    }
+                                    else if (prop.IsEnum && prop.EnumValues != null)
+                                    {
+                                        <select name="@prop.Name" class="razorkit-form-control">
+                                            @foreach (var enumValue in prop.EnumValues)
+                                            {
+                                                <option value="@enumValue"
+                                                        @(defaultValues.GetValueOrDefault(prop.Name)?.ToString() == enumValue ? "selected" : "")>
+                                                    @enumValue
+                                                </option>
+                                            }
+                                        </select>
+                                    }
+                                    else if (prop.IsCollection || prop.IsComplexType)
+                                    {
+                                        var jsonValue = SerializePropertyValue(defaultValues.GetValueOrDefault(prop.Name));
+                                        <textarea class="razorkit-form-control"
+                                               name="@prop.Name"
+                                               rows="5"
+                                               placeholder="Enter JSON for @prop.DisplayName.ToLower()"
+                                               style="font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; font-size: 0.8125rem;">@jsonValue</textarea>
+                                        <small style="color: #6b7280; font-size: 0.75rem;">JSON format (e.g., [{"LinkText":"Home","LinkUrl":"/"}])</small>
+                                    }
+                                    else
+                                    {
+                                        <input type="text"
+                                               class="razorkit-form-control"
+                                               name="@prop.Name"
+                                               value="@(defaultValues.GetValueOrDefault(prop.Name)?.ToString() ?? "")"
+                                               placeholder="Enter @prop.DisplayName.ToLower()" />
+                                    }
+                                </div>
+                            }
+                        </form>
+
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button type="button" class="razorkit-reset-button" onclick="resetForm()">
+                                Reset to Defaults
+                            </button>
+                            @if (selectedStory != null && selectedStory.Properties.Any())
+                            {
+                                <button type="button" class="razorkit-reset-button" style="background: #059669;" onclick="resetToStory()">
+                                    Reset to Story
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="razorkit-control-section">
+                        <div class="razorkit-control-section-title">Component Code</div>
+                        <div class="razorkit-component-code" id="component-code">
+                            @{
+                                var codeInstance = PropertyService.CreateComponentInstance(propsType!, defaultValues);
+                                var propsJson = System.Text.Json.JsonSerializer.Serialize(codeInstance, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                            }
+                            <div style="color: #059669;">@@await Html.PartialAsync("@selectedComponent.Path", new @(selectedComponent.Name)Props</div>
+                            <div style="color: #dc2626;">{</div>
+                            @foreach (var line in propsJson.Split('\n').Skip(1).Take(propsJson.Split('\n').Length - 2))
+                            {
+                                <div style="margin-left: 1rem;">@line</div>
+                            }
+                            <div style="color: #dc2626;">})</div>
+                        </div>
+                    </div>
+
+                    <!-- Accessibility Panel -->
+                    <div class="razorkit-a11y-panel">
+                        <div class="razorkit-a11y-header" onclick="toggleA11yPanel()">
+                            <span>♿ Accessibility</span>
+                            <span id="a11y-toggle-icon">▶</span>
+                        </div>
+                        <div class="razorkit-a11y-content" id="a11y-content">
+                            <div class="razorkit-a11y-summary">
+                                <button class="razorkit-a11y-run-button" onclick="runA11yTest()" id="a11y-run-button">
+                                    Run Accessibility Test
+                                </button>
+                                <div id="a11y-summary"></div>
+                            </div>
+                            <div class="razorkit-a11y-issues" id="a11y-issues"></div>
+                        </div>
+                    </div>
+                }
+                else if (selectedComponent != null)
+                {
+                    <div class="razorkit-control-section">
+                        <div class="razorkit-control-section-title">No Properties</div>
+                        <p class="text-sm text-gray-600">This component doesn't have a Props class or no properties were found.</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const propertyMetadata = @Html.Raw(JsonSerializer.Serialize(
+            properties.ToDictionary(
+                p => p.Name, 
+                p => new { 
+                    isCollection = p.IsCollection, 
+                    isComplexType = p.IsComplexType,
+                    typeName = p.Type.Name
+                }
+            )
+        ));
+
+        function resetForm() {
+               const form = document.getElementById('component-form');
+               if (form) {
+                   form.reset();
+                   updateIframePreview();
+                   updateComponentCode();
+               }
+           }
+
+           function openComponentInNewWindow() {
+               const iframe = document.getElementById('preview-iframe');
+               const openBtn = document.querySelector('.razorkit-open-window-btn');
+
+               if (!iframe || !iframe.src) {
+                   alert('No component preview available to open');
+                   return;
+               }
+
+               openBtn.disabled = true;
+
+               const newWindow = window.open(iframe.src, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+
+               if (!newWindow) {
+                   alert('Popup blocked. Please allow popups for this site to open components in new windows.');
+               }
+
+               setTimeout(() => {
+                   openBtn.disabled = false;
+               }, 1000);
+           }
+
+           function toggleSidebarLayout(layout) {
+               const body = document.body;
+               const layoutButtons = document.querySelectorAll('.razorkit-layout-btn');
+               const showControlsBtn = document.querySelector('.razorkit-show-controls-btn');
+
+               body.classList.remove('layout-bottom', 'layout-hidden');
+               layoutButtons.forEach(btn => btn.classList.remove('active'));
+
+               if (layout === 'bottom') {
+                   body.classList.add('layout-bottom');
+                   const bottomBtn = document.getElementById('layout-bottom');
+                   if (bottomBtn) bottomBtn.classList.add('active');
+                   showControlsBtn.style.display = 'none';
+               } else if (layout === 'hidden') {
+                   body.classList.add('layout-hidden');
+                   const hiddenBtn = document.getElementById('layout-hidden');
+                   if (hiddenBtn) hiddenBtn.classList.add('active');
+                   showControlsBtn.style.display = 'flex';
+               } else {
+                   const sideBtn = document.getElementById('layout-side');
+                   if (sideBtn) sideBtn.classList.add('active');
+                   showControlsBtn.style.display = 'none';
+               }
+
+               localStorage.setItem('razorkit-sidebar-layout', layout);
+               setTimeout(updateViewportInfo, 100);
+           }
+
+           function resetToStory() {
+               window.location.reload();
+           }
+
+           document.addEventListener('change', function(evt) {
+               if (evt.target.closest('#component-form')) {
+                   updateIframePreview();
+                   updateComponentCode();
+               }
+           });
+
+           document.addEventListener('keyup', function(evt) {
+               if (evt.target.closest('#component-form') && evt.target.type === 'text') {
+                   clearTimeout(window.updateTimeout);
+                   window.updateTimeout = setTimeout(function() {
+                       updateIframePreview();
+                       updateComponentCode();
+                   }, 300);
+               }
+           });
+
+           function toggleStories(componentName) {
+               const storiesList = document.getElementById('stories-' + componentName);
+               if (storiesList) {
+           storiesList.classList.toggle('expanded');
+        }
+           }
+
+           function updateComponentCode() {
+               const form = document.getElementById('component-form');
+               if (!form) return;
+
+               const formData = new FormData(form);
+               const props = {};
+
+               for (let [key, value] of formData.entries()) {
+                   if (key !== 'componentName') {
+                       if (value === 'true' || value === 'false') {
+                           props[key] = value === 'true';
+                       } else if (!isNaN(value) && value !== '') {
+                           props[key] = parseFloat(value);
+                       } else {
+                           props[key] = value;
+                       }
+                   }
+               }
+
+               const codeDiv = document.getElementById('component-code');
+               if (codeDiv) {
+                   let codeContent = '<div style="color: #059669;">@@await Html.PartialAsync("@selectedComponent?.Path", new @(selectedComponent?.Name)Props</div>';
+                   codeContent += '<div style="color: #dc2626;">{</div>';
+
+                   Object.entries(props).forEach(([key, value]) => {
+                       const valueStr = typeof value === 'string' ? `"${value}"` : value.toString();
+                       codeContent += `<div style="margin-left: 1rem;"><span style="color: #7c2d12;">${key}</span> = <span style="color: #0369a1;">${valueStr}</span>,</div>`;
+                   });
+
+                   codeContent += '<div style="color: #dc2626;">})</div>';
+                   codeDiv.innerHTML = codeContent;
+               }
+
+               clearA11yResults();
+           }
+
+           function toggleA11yPanel() {
+               const content = document.getElementById('a11y-content');
+               const icon = document.getElementById('a11y-toggle-icon');
+
+               if (content && icon) {
+                   content.classList.toggle('expanded');
+                   icon.textContent = content.classList.contains('expanded') ? '▼' : '▶';
+               }
+           }
+
+           function runA11yTest() {
+               const button = document.getElementById('a11y-run-button');
+               const summary = document.getElementById('a11y-summary');
+               const issues = document.getElementById('a11y-issues');
+
+               if (!button || !summary || !issues) return;
+
+               button.disabled = true;
+               button.textContent = 'Running Test...';
+               summary.innerHTML = '';
+               issues.innerHTML = '';
+
+               const iframe = document.getElementById('preview-iframe');
+               if (!iframe) {
+                   button.disabled = false;
+                   button.textContent = 'Run Accessibility Test';
+                   summary.innerHTML = '<span class="razorkit-a11y-badge violations">No iframe found</span>';
+                   return;
+               }
+
+               function runTestOnIframe() {
+                   try {
+                       if (!iframe.contentDocument || !iframe.contentWindow) {
+                           throw new Error('Cannot access iframe content');
+                       }
+
+                       iframe.contentWindow.axe.run(iframe.contentDocument)
+                           .then(function (results) {
+                               displayA11yResults(results);
+                           })
+                           .catch(function (error) {
+                               summary.innerHTML = '<span class="razorkit-a11y-badge violations">Error running test: ' + error.message + '</span>';
+                           })
+                           .finally(function () {
+                               button.disabled = false;
+                               button.textContent = 'Run Accessibility Test';
+                           });
+                   } catch (error) {
+                       summary.innerHTML = '<span class="razorkit-a11y-badge violations">Cannot access iframe content</span>';
+                       button.disabled = false;
+                       button.textContent = 'Run Accessibility Test';
+                   }
+               }
+
+               if (iframe.contentDocument && iframe.contentDocument.readyState === 'complete') {
+                   runTestOnIframe();
+               } else {
+                   iframe.addEventListener('load', runTestOnIframe, { once: true });
+               }
+           }
+
+           function displayA11yResults(results) {
+               const summary = document.getElementById('a11y-summary');
+               const issues = document.getElementById('a11y-issues');
+
+               if (!summary || !issues) return;
+
+               const violations = results.violations.length;
+               const passes = results.passes.length;
+               const incomplete = results.incomplete.length;
+
+               // Create summary badges
+               let summaryHTML = '';
+
+               if (violations === 0) {
+                   summaryHTML += '<span class="razorkit-a11y-badge pass">✓ ' + passes + ' Passed</span>';
+               } else {
+                   summaryHTML += '<span class="razorkit-a11y-badge violations">⚠ ' + violations + ' Violations</span>';
+               }
+
+               if (passes > 0) {
+                   summaryHTML += '<span class="razorkit-a11y-badge pass">✓ ' + passes + ' Passed</span>';
+               }
+
+               if (incomplete > 0) {
+                   summaryHTML += '<span class="razorkit-a11y-badge incomplete">⚠ ' + incomplete + ' Incomplete</span>';
+               }
+
+               summary.innerHTML = summaryHTML;
+
+               // Display violations
+               let issuesHTML = '';
+
+               results.violations.forEach(function(violation, index) {
+                   const impact = violation.impact || 'moderate';
+
+                   // Build elements list with details
+                   let elementsHTML = '';
+                   violation.nodes.forEach(function(node, nodeIndex) {
+                       const target = node.target.join(', ') || 'Unknown';
+                       const html = node.html || 'HTML not available';
+                       const failureSummary = node.failureSummary || 'No summary available';
+
+                       elementsHTML += `
+                           <div class="razorkit-a11y-element" style="margin-bottom: 1rem; padding: 0.75rem; background: #f9f9f9; border-radius: 0.375rem; border-left: 3px solid #ef4444;">
+                               <div style="margin-bottom: 0.5rem;">
+                                   <strong style="color: #374151;">Element ${nodeIndex + 1}:</strong>
+                                   <code style="background: #e5e7eb; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; color: #1f2937;">${target}</code>
+                               </div>
+                               <div style="margin-bottom: 0.5rem;">
+                                   <strong style="color: #374151;">HTML:</strong>
+                                   <pre style="background: #ffffff; padding: 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; white-space: pre-wrap; word-break: break-all; margin: 0.25rem 0; border: 1px solid #d1d5db; max-height: 100px; overflow-y: auto;"><code>${html.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>
+                               </div>
+                               <div>
+                                   <strong style="color: #374151;">Issue:</strong>
+                                   <div style="color: #6b7280; font-size: 0.875rem; margin-top: 0.25rem;">${failureSummary}</div>
+                               </div>
+                           </div>
+                       `;
+                   });
+
+                   issuesHTML += `
+                       <div class="razorkit-a11y-issue">
+                           <div class="razorkit-a11y-issue-header" onclick="toggleA11yIssue(${index})">
+                               <div class="razorkit-a11y-issue-title">${violation.description}</div>
+                               <div class="razorkit-a11y-issue-impact ${impact}">${impact.toUpperCase()}</div>
+                           </div>
+                           <div class="razorkit-a11y-issue-details" id="a11y-issue-${index}">
+                               <div class="razorkit-a11y-issue-body">
+                                   <div style="margin-bottom: 1rem;">
+                                       <p><strong>Help:</strong> ${violation.help}</p>
+                                       <p><strong>Rule:</strong> ${violation.id}</p>
+                                       <p><strong>Elements affected:</strong> ${violation.nodes.length}</p>
+                                       ${violation.helpUrl ? `<p><a href="${violation.helpUrl}" target="_blank" style="color: #3b82f6;">Learn more →</a></p>` : ''}
+                                   </div>
+                                   <div>
+                                       <h5 style="margin: 0 0 0.5rem 0; font-size: 0.875rem; font-weight: 600; color: #374151;">Affected Elements:</h5>
+                                       ${elementsHTML}
+                                   </div>
+                               </div>
+                           </div>
+                       </div>
+                   `;
+               });
+
+               issues.innerHTML = issuesHTML;
+
+               // Auto-expand the accessibility panel if there are violations
+               if (violations > 0) {
+                   const content = document.getElementById('a11y-content');
+                   const icon = document.getElementById('a11y-toggle-icon');
+                   if (content && !content.classList.contains('expanded')) {
+                       content.classList.add('expanded');
+                       if (icon) icon.textContent = '▼';
+                   }
+               }
+           }
+
+           function toggleA11yIssue(index) {
+               const details = document.getElementById('a11y-issue-' + index);
+               if (details) {
+                   details.classList.toggle('expanded');
+               }
+           }
+
+           function clearA11yResults() {
+               const summary = document.getElementById('a11y-summary');
+               const issues = document.getElementById('a11y-issues');
+
+               if (summary) summary.innerHTML = '';
+               if (issues) issues.innerHTML = '';
+           }
+
+           // Viewport Management Functions
+           function changeViewport() {
+               const selector = document.getElementById('viewport-selector');
+               const preview = document.querySelector('.razorkit-preview');
+
+               if (!selector || !preview) return;
+
+               const selectedViewport = selector.value;
+
+               // Remove all viewport classes
+               preview.classList.remove('viewport-mobile', 'viewport-tablet', 'viewport-laptop', 'viewport-desktop', 'viewport-large', 'viewport-responsive');
+
+               // Add the selected viewport class
+               preview.classList.add('viewport-' + selectedViewport);
+
+               // Force iframe to refresh with new viewport dimensions
+               setTimeout(function() {
+                   const iframe = document.getElementById('preview-iframe');
+                   if (iframe) {
+                       // Force a reload by temporarily changing and restoring the src
+                       const currentSrc = iframe.src;
+                       iframe.src = 'about:blank';
+                       setTimeout(function() {
+                           iframe.src = currentSrc;
+                       }, 10);
+                   }
+
+                   // Update viewport info display after iframe loads
+                   setTimeout(updateViewportInfo, 100);
+               }, 10);
+
+               // Store preference in localStorage
+               localStorage.setItem('razorkit-viewport', selectedViewport);
+           }
+
+           function updateViewportInfo() {
+               const iframe = document.getElementById('preview-iframe');
+               const viewportInfo = document.getElementById('viewport-info');
+               const sizeSpan = document.getElementById('viewport-size');
+
+               if (!iframe || !viewportInfo || !sizeSpan) return;
+
+               function measureAndUpdate() {
+                   const rect = iframe.getBoundingClientRect();
+                   const width = Math.round(rect.width);
+                   const height = Math.round(rect.height);
+
+                   const selector = document.getElementById('viewport-selector');
+                   const selectedOption = selector?.options[selector.selectedIndex];
+                   const viewportName = selectedOption?.text.split(' (')[0] || 'Unknown';
+
+                   sizeSpan.textContent = `${viewportName} (${width} × ${height}px)`;
+               }
+
+               if (iframe.contentDocument && iframe.contentDocument.readyState === 'complete') {
+                   measureAndUpdate();
+               } else {
+                   iframe.addEventListener('load', measureAndUpdate, { once: true });
+                   setTimeout(measureAndUpdate, 200);
+               }
+           }
+
+           function updateIframePreview() {
+               const form = document.getElementById('component-form');
+               const iframe = document.getElementById('preview-iframe');
+               
+               if (!form || !iframe) return;
+               
+               const formData = new FormData(form);
+               const componentName = formData.get('componentName');
+               const storyName = formData.get('storyName') || 'default';
+               
+               // Build props object from form data
+               const props = {};
+               
+               for (let [key, value] of formData.entries()) {
+                   if (key !== 'componentName' && key !== 'storyName') {
+                       // Handle checkboxes properly
+                       const inputElement = form.querySelector(`[name="${key}"]`);
+                       if (inputElement && inputElement.type === 'checkbox') {
+                           props[key] = inputElement.checked;
+                       } else if (inputElement && inputElement.tagName === 'TEXTAREA') {
+                           // Try to parse JSON for complex types
+                           try {
+                               const trimmedValue = value.trim();
+                               if (trimmedValue) {
+                                   props[key] = JSON.parse(trimmedValue);
+                               } else {
+                                   props[key] = null;
+                               }
+                           } catch (e) {
+                               console.error(`Failed to parse JSON for ${key}:`, e);
+                               // Keep the string value if JSON parsing fails
+                               props[key] = value;
+                           }
+                       } else {
+                           props[key] = value;
+                       }
+                   }
+               }
+               
+               // POST the data to update the iframe
+               postToIframe(iframe, `/razorkit-preview/preview/${componentName}/${storyName}`, props);
+           }
+
+           function postToIframe(iframe, url, data) {
+               try {
+                   // Create a temporary form to POST to the iframe
+                   const form = document.createElement('form');
+                   form.method = 'POST';
+                   form.action = url;
+                   form.target = iframe.name || 'preview-iframe';
+                   form.style.display = 'none';
+                   
+                   // Add props as JSON
+                   const input = document.createElement('input');
+                   input.type = 'hidden';
+                   input.name = 'propsJson';
+                   input.value = JSON.stringify(data);
+                   form.appendChild(input);
+                   
+                   document.body.appendChild(form);
+                   form.submit();
+                   document.body.removeChild(form);
+               } catch (e) {
+                   console.error('Error posting to iframe:', e);
+               }
+           }
+
+           function initializeViewport() {
+               const savedViewport = localStorage.getItem('razorkit-viewport');
+               const selector = document.getElementById('viewport-selector');
+
+               if (savedViewport && selector) {
+                   selector.value = savedViewport;
+                   const preview = document.querySelector('.razorkit-preview');
+                   if (preview) {
+                       preview.classList.add('viewport-' + savedViewport);
+                   }
+               }
+               
+               setTimeout(updateViewportInfo, 100);
+
+               let resizeTimeout;
+               window.addEventListener('resize', function() {
+                   clearTimeout(resizeTimeout);
+                   resizeTimeout = setTimeout(updateViewportInfo, 100);
+               });
+
+               const observer = new MutationObserver(function() {
+                   setTimeout(updateViewportInfo, 100);
+               });
+
+               const previewContainer = document.getElementById('component-preview');
+               if (previewContainer) {
+                   observer.observe(previewContainer, { childList: true, subtree: true });
+               }
+           }
+
+           // Initialize with POST if there's a form
+           function initializePreview() {
+               const form = document.getElementById('component-form');
+               if (form) {
+                   // Give iframe time to load, then POST the initial data
+                   const iframe = document.getElementById('preview-iframe');
+                   if (iframe) {
+                       iframe.addEventListener('load', function() {
+                           updateIframePreview();
+                       }, { once: true });
+                   }
+               }
+           }
+
+           function initializeIframeWithDefaults() {
+               const form = document.getElementById('component-form');
+               const iframe = document.getElementById('preview-iframe');
+
+               if (form && iframe) {
+                   // Only update component code on initial load
+                   // Component renders correctly via GET request
+                   updateComponentCode();
+               }
+           }
+
+           document.addEventListener('DOMContentLoaded', function() {
+               initializeViewport();
+
+               const savedLayout = localStorage.getItem('razorkit-sidebar-layout') || 'side';
+               toggleSidebarLayout(savedLayout);
+
+               setTimeout(function() {
+                   initializeIframeWithDefaults();
+               }, 100);
+
+               const previewContainer = document.getElementById('component-preview');
+               if (previewContainer && previewContainer.children.length > 0) {
+                   setTimeout(runA11yTest, 1000);
+               }
+           });
+    </script>
+</body>
+</html>
