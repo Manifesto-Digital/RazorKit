@@ -1,4 +1,5 @@
 using System.Reflection;
+using Manifesto.RazorKit.Constants;
 using Manifesto.RazorKit.Models;
 using Microsoft.AspNetCore.Hosting;
 
@@ -45,23 +46,23 @@ public class ComponentDiscoveryService
             {
                 // Find all types that end with "Stories" in the Components namespace
                 var storyTypes = assembly.GetTypes()
-                    .Where(t => t.Name.EndsWith("Stories") &&
+                    .Where(t => t.Name.EndsWith(RazorKitConstants.ComponentNaming.StoriesSuffix) &&
                                t.Namespace != null &&
-                               t.Namespace.Contains("Components"))
+                               t.Namespace.Contains(RazorKitConstants.ComponentNaming.ComponentsNamespace))
                     .ToList();
 
                 foreach (Type storyType in storyTypes)
                 {
                     // Simple extraction: ButtonStories -> Button
-                    var componentName = storyType.Name.Replace("Stories", "");
+                    var componentName = storyType.Name.Replace(RazorKitConstants.ComponentNaming.StoriesSuffix, "");
 
                     // Extract level from namespace: Components.Atoms.Button -> Atoms
                     var namespaceParts = storyType.Namespace?.Split('.') ?? Array.Empty<string>();
-                    var level = "Unknown";
+                    var level = RazorKitConstants.AtomicLevels.Unknown;
 
                     for (int i = 0; i < namespaceParts.Length - 1; i++)
                     {
-                        if (namespaceParts[i] == "Components" && i + 1 < namespaceParts.Length)
+                        if (namespaceParts[i] == RazorKitConstants.ComponentNaming.ComponentsNamespace && i + 1 < namespaceParts.Length)
                         {
                             level = namespaceParts[i + 1];
                             break;
@@ -96,8 +97,9 @@ public class ComponentDiscoveryService
         try
         {
             // Try to find the Props type in the same assembly
+            var propsTypeName = $"{componentName}{RazorKitConstants.ComponentNaming.PropsSuffix}";
             return assembly.GetTypes()
-                .FirstOrDefault(t => t.Name.Equals($"{componentName}Props", StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(t => t.Name.Equals(propsTypeName, StringComparison.OrdinalIgnoreCase));
         }
         catch (Exception)
         {
