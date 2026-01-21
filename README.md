@@ -224,6 +224,21 @@ builder.Services.AddRazorKit(options =>
 - .NET 9.0 or later
 - ASP.NET Core
 
+## Technical Notes
+
+### Cache Busting
+
+RazorKit uses different cache busting strategies depending on the content type:
+
+- **Main UI** (`/razorkit` page): Uses `asp-append-version="true"` Tag Helper for local CSS files
+- **Preview iframe** (RCL content from `/_content/`): Uses **fresh timestamp** on each request (`?v={ticks}`)
+  - RCL static files are embedded resources that `IFileVersionProvider` cannot hash
+  - Fresh timestamp is generated for every component preview
+  - Always gets the latest CSS/JS changes
+  - Format: `/css/main.css?v=638732123456789`
+
+**Note:** Since RazorKit is a development/testing tool, fresh timestamps on each request ensure you always see the latest changes without needing to restart or configure caching.
+
 ## Publishing to GitHub Packages
 
 ### Prerequisites
