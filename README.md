@@ -249,7 +249,6 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 - [ ] Dark mode support
 - [ ] Component documentation generation
 - [ ] Plugin system for custom addons
-- [ ] Blazor component support
 
 ## License
 
