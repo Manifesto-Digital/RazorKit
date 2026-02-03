@@ -32,7 +32,7 @@
 
 ## Overview
 
-RazorKit brings the component-driven development experience to ASP.NET Core Razor applications. Develop, test, and document your UI components in isolation with an interactive preview environment—no need to spin up your entire application.
+RazorKit brings the component-driven development experience to ASP.NET Core Razor applications. Develop, test, and document your UI components in isolation within your running application using an interactive preview environment—without navigating through the full application flow.
 
 ## Features
 
