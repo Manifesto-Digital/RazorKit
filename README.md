@@ -6,10 +6,18 @@
 
 *Inspired by Storybook, built for .NET developers*
 
+[![Build Status](https://img.shields.io/github/actions/workflow/status/manifesto-digital/razorkit/nuget-release.yml?style=flat-square&logo=github&label=build)](https://github.com/manifesto-digital/razorkit/actions/workflows/nuget-release.yml)
 [![NuGet Version](https://img.shields.io/nuget/v/Manifesto.RazorKit?style=flat-square&logo=nuget&color=004880)](https://www.nuget.org/packages/Manifesto.RazorKit)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/Manifesto.RazorKit?style=flat-square&logo=nuget&color=004880)](https://www.nuget.org/packages/Manifesto.RazorKit)
 [![License](https://img.shields.io/github/license/manifesto-digital/razorkit?style=flat-square)](LICENSE.md)
 [![.NET](https://img.shields.io/badge/.NET-9.0-512BD4?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com/)
+
+[![GitHub Stars](https://img.shields.io/github/stars/manifesto-digital/razorkit?style=flat-square&logo=github)](https://github.com/manifesto-digital/razorkit/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/manifesto-digital/razorkit?style=flat-square&logo=github)](https://github.com/manifesto-digital/razorkit/network/members)
+[![GitHub Issues](https://img.shields.io/github/issues/manifesto-digital/razorkit?style=flat-square&logo=github)](https://github.com/manifesto-digital/razorkit/issues)
+[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/manifesto-digital/razorkit?style=flat-square&logo=github)](https://github.com/manifesto-digital/razorkit/pulls)
+[![Contributors](https://img.shields.io/github/contributors/manifesto-digital/razorkit?style=flat-square&logo=github)](https://github.com/manifesto-digital/razorkit/graphs/contributors)
+[![Last Commit](https://img.shields.io/github/last-commit/manifesto-digital/razorkit?style=flat-square&logo=github)](https://github.com/manifesto-digital/razorkit/commits/main)
 
 [Features](#features) •
 [Installation](#installation) •
