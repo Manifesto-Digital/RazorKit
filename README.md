@@ -6,8 +6,6 @@
   <img src="razorkit-logo-white.png" alt="RazorKit logo" width="240">
 </picture>
 
-# 🪒 RazorKit
-
 **A component preview and development tool for ASP.NET Core Razor components**
 
 *Inspired by Storybook, built for .NET developers*
