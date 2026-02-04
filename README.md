@@ -1,6 +1,10 @@
 <div align="center">
 
-# 🪒 RazorKit
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="razorkit-logo-black.png">
+  <source media="(prefers-color-scheme: light)" srcset="razorkit-logo-white.png">
+  <img src="razorkit-logo-white.png" alt="RazorKit logo" width="240">
+</picture>
 
 **A component preview and development tool for ASP.NET Core Razor components**
 
