@@ -14,7 +14,7 @@
     
     <!-- NuGet Package Metadata -->
     <PackageId>Manifesto.RazorKit</PackageId>
-    <Version>0.0.1</Version>
+    <Version>0.1.0</Version>
     <Authors>Manifesto Digital</Authors>
     <Company>Manifesto Digital</Company>
     <Description>A component preview and development tool for ASP.NET Core Razor components. Provides an interactive UI for developing, testing, and documenting reusable Razor components, inspired by Storybook.</Description>
