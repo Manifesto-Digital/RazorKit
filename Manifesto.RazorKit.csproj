@@ -29,6 +29,9 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     
+    <!-- The test project lives under this folder; keep its sources out of the package -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);tests/**</DefaultItemExcludes>
+
     <!-- Suppress warnings -->
     <NoWarn>$(NoWarn);CS8604</NoWarn>
   </PropertyGroup>
@@ -47,6 +50,10 @@
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Manifesto.RazorKit.Tests" />
   </ItemGroup>
 
   <ItemGroup>

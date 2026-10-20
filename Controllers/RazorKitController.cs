@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.Json;
 using Manifesto.RazorKit.Converters;
+using Manifesto.RazorKit.Filters;
 using Manifesto.RazorKit.Models;
 using Manifesto.RazorKit.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -12,6 +13,7 @@ namespace Manifesto.RazorKit.Controllers;
 
 [ApiController]
 [Route("razorkit-preview")]
+[ResponseHeaders]
 public class RazorKitController : Controller
 {
     private readonly ComponentDiscoveryService _componentDiscovery;

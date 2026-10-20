@@ -1,0 +1,61 @@
+name: PR
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      with:
+        dotnet-version: |
+          8.0.x
+          9.0.x
+          10.0.x
+
+    - name: Restore
+      run: dotnet restore Manifesto.RazorKit.sln
+
+    - name: Build
+      run: dotnet build Manifesto.RazorKit.sln --configuration Release --no-restore
+
+    # Runs the tests for every target framework the test project declares.
+    - name: Test
+      run: dotnet test Manifesto.RazorKit.sln --configuration Release --no-build
+
+    # `dotnet list package --vulnerable` exits 0 even when it finds vulnerabilities, so the
+    # job reads its report. Fails closed: anything other than a clean report per project
+    # (a command failure, an audit-source warning or error, a missing "no vulnerable" line)
+    # fails the job, because then "no vulnerable packages" is unconfirmed.
+    - name: Check for vulnerable packages
+      shell: bash
+      run: |
+        set -o pipefail
+        dotnet list Manifesto.RazorKit.sln package --vulnerable --include-transitive 2>&1 | tee vulnerable.txt
+        if grep -Eiq "has the following vulnerable packages|NU190[0-9]|warning|error" vulnerable.txt; then
+          echo "::error::Vulnerable packages found, or the audit could not be completed"
+          exit 1
+        fi
+        clean=$(grep -c "has no vulnerable packages" vulnerable.txt || true)
+        projects=$(dotnet sln Manifesto.RazorKit.sln list | tail -n +3 | wc -l)
+        if [ "$clean" -ne "$projects" ]; then
+          echo "::error::Expected a clean report for all $projects projects, found $clean"
+          exit 1
+        fi
