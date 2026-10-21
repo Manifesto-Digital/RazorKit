@@ -10,7 +10,15 @@ namespace Manifesto.RazorKit.Pages;
 /// Resolves the selected component and story for the explorer page. The logic lives here, not
 /// in the view, so the page's filters and any later request handling sit on a type RazorKit owns.
 /// </summary>
+/// <remarks>
+/// [IgnoreAntiforgeryToken] stops Razor Pages' automatic validation, and any host-global filter,
+/// from calling the host's antiforgery service. The page only answers GET and HEAD (the method
+/// check); request protection is here as well so every RazorKit path that accepts other methods carries it.
+/// </remarks>
+[IgnoreAntiforgeryToken]
 [ResponseHeaders]
+[MethodCheck]
+[RequestProtection]
 public class RazorKitPageModel : PageModel
 {
     private readonly ComponentDiscoveryService _componentDiscovery;
@@ -38,6 +46,9 @@ public class RazorKitPageModel : PageModel
     public Dictionary<string, object> DefaultValues { get; private set; } = new();
 
     public string InitialIframeUrl { get; private set; } = string.Empty;
+
+    /// <summary>The value the page script posts back with every preview render.</summary>
+    public string RequestToken { get; private set; } = string.Empty;
 
     private Type? PropsType { get; set; }
 
@@ -97,6 +108,7 @@ public class RazorKitPageModel : PageModel
             InitialIframeUrl = $"/razorkit-preview/preview/{SelectedComponent.Name.ToLower()}/{SelectedStory?.Name.ToLower() ?? "default"}";
         }
 
+        RequestToken = Filters.RequestToken.Issue(HttpContext);
         return Page();
     }
 

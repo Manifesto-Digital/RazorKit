@@ -38,6 +38,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="razorkit-token" content="@Model.RequestToken">
     <title>@ViewBag.Title</title>
     <link rel="stylesheet" href="/css/main.css" />
     <script src="https://unpkg.com/axe-core@4.8.2/axe.min.js"></script>
@@ -1400,6 +1401,14 @@
                    input.name = 'propsJson';
                    input.value = JSON.stringify(data);
                    form.appendChild(input);
+
+                   // The server rejects a render POST without the token the page was issued.
+                   const token = document.querySelector('meta[name="razorkit-token"]');
+                   const tokenInput = document.createElement('input');
+                   tokenInput.type = 'hidden';
+                   tokenInput.name = '__RazorKitToken';
+                   tokenInput.value = token ? token.content : '';
+                   form.appendChild(tokenInput);
                    
                    document.body.appendChild(form);
                    form.submit();
