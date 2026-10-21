@@ -80,6 +80,31 @@ public static partial class RazorKitRequests
         return await client.SendAsync(RenderPost(token.CookieValue, token.PageValue, propsJson));
     }
 
+    /// <summary>
+    /// A well-formed token value minted by the test. The token is double-submit, so any 32-byte
+    /// value sent as both the cookie and the field passes; minting one locally lets a test make
+    /// render POSTs without a shell GET, which would spend the page bucket.
+    /// </summary>
+    public static string MintToken() =>
+        Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+
+    /// <summary>
+    /// Makes <paramref name="request"/> pass request protection: same-origin provenance and a
+    /// matching token cookie and field. <paramref name="form"/> is the rest of the form body.
+    /// </summary>
+    public static HttpRequestMessage WithValidProtection(HttpRequestMessage request, IEnumerable<KeyValuePair<string, string>>? form = null)
+    {
+        var token = MintToken();
+        var fields = new List<KeyValuePair<string, string>>(form ?? Array.Empty<KeyValuePair<string, string>>())
+        {
+            new(TokenField, token)
+        };
+        request.Content = new FormUrlEncodedContent(fields);
+        request.Headers.Add("Cookie", $"{CookieName}={token}");
+        request.Headers.Add("Sec-Fetch-Site", "same-origin");
+        return request;
+    }
+
     public static string? RejectCode(HttpResponseMessage response) =>
         response.Headers.TryGetValues(RejectHeader, out var values) ? values.Single() : null;
 

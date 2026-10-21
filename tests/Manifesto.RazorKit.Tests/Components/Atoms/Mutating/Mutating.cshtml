@@ -1,0 +1,5 @@
+@model Manifesto.RazorKit.Tests.Components.Atoms.Mutating.MutatingProps
+@{
+    Model.Items.Add("added-by-view");
+}
+<p>items:@Model.Items.Count</p>

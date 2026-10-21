@@ -3,6 +3,7 @@ using System.Text.Json;
 using Manifesto.RazorKit.Converters;
 using Manifesto.RazorKit.Filters;
 using Manifesto.RazorKit.Models;
+using Manifesto.RazorKit.Registry;
 using Manifesto.RazorKit.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -17,7 +18,9 @@ namespace Manifesto.RazorKit.Controllers;
 [Route("razorkit-preview")]
 [IgnoreAntiforgeryToken]
 [ResponseHeaders]
+[RateLimit]
 [RequestProtection]
+[ConcurrencyLimit]
 public class RazorKitController : Controller
 {
     // Props come from a person editing the Controls panel; nothing legitimate nests deeper.
@@ -28,19 +31,22 @@ public class RazorKitController : Controller
     private readonly ComponentStoryService _storyService;
     private readonly ICompositeViewEngine _viewEngine;
     private readonly RazorKitOptions _options;
+    private readonly RazorKitRegistry _registry;
 
     public RazorKitController(
         ComponentDiscoveryService componentDiscovery,
         ComponentPropertyService propertyService,
         ComponentStoryService storyService,
         ICompositeViewEngine viewEngine,
-        RazorKitOptions options)
+        RazorKitOptions options,
+        RazorKitRegistry registry)
     {
         _componentDiscovery = componentDiscovery;
         _propertyService = propertyService;
         _storyService = storyService;
         _viewEngine = viewEngine;
         _options = options;
+        _registry = registry;
     }
 
     // GET takes no props from any source, so only a POST that passed request protection can
@@ -67,26 +73,7 @@ public class RazorKitController : Controller
             return Content(CreatePreviewHtml("<div style='padding: 2rem;'>Component not found</div>"), "text/html");
         }
 
-        Type? propsType = null;
-        IEnumerable<Assembly> assemblies = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location));
-
-        foreach (Assembly assembly in assemblies)
-        {
-            try
-            {
-                propsType = assembly.GetTypes()
-                    .FirstOrDefault(t => t.Name.Equals($"{componentName}Props", StringComparison.OrdinalIgnoreCase));
-                if (propsType != null)
-                {
-                    break;
-                }
-            }
-            catch
-            {
-                continue;
-            }
-        }
+        Type? propsType = _registry.FindPropsType(componentName);
 
         if (propsType == null)
         {
@@ -152,7 +139,7 @@ public class RazorKitController : Controller
         var jsonOptions = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true,
-            Converters = { new InterfaceToConcreteConverter() }
+            Converters = { new InterfaceToConcreteConverter(_registry) }
         };
 
         try

@@ -1,7 +1,6 @@
-using System.Collections.Concurrent;
-using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Manifesto.RazorKit.Registry;
 using Microsoft.AspNetCore.Html;
 
 namespace Manifesto.RazorKit.Converters;
@@ -12,14 +11,20 @@ namespace Manifesto.RazorKit.Converters;
 /// </summary>
 public class InterfaceToConcreteConverter : JsonConverter<object>
 {
-    // Cache to avoid repeated reflection lookups
-    private static readonly ConcurrentDictionary<Type, Type?> _typeCache = new();
+    private readonly RazorKitRegistry _registry;
 
-    // Known interface to concrete type mappings for framework types
-    private static readonly Dictionary<string, Type> _knownMappings = new()
+    /// <summary>
+    /// For callers outside RazorKit's own services, such as <c>JsonHelper</c> in a host.
+    /// </summary>
+    public InterfaceToConcreteConverter()
+        : this(RazorKitRegistry.ForInterfaceLookups)
     {
-        { "Microsoft.AspNetCore.Html.IHtmlContent", typeof(Microsoft.AspNetCore.Html.HtmlString) }
-    };
+    }
+
+    public InterfaceToConcreteConverter(RazorKitRegistry registry)
+    {
+        _registry = registry;
+    }
 
     public override object? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
@@ -45,7 +50,7 @@ public class InterfaceToConcreteConverter : JsonConverter<object>
             throw new JsonException($"Expected string value for IHtmlContent, got {reader.TokenType}");
         }
 
-        Type? concreteType = GetConcreteType(typeToConvert) ?? throw new JsonException($"Cannot find concrete type for interface: {typeToConvert.FullName}");
+        Type? concreteType = _registry.FindConcreteType(typeToConvert) ?? throw new JsonException($"Cannot find concrete type for interface: {typeToConvert.FullName}");
 
         // Read the JSON as a document first to avoid reader state issues
         using var doc = JsonDocument.ParseValue(ref reader);
@@ -66,60 +71,6 @@ public class InterfaceToConcreteConverter : JsonConverter<object>
     public override bool CanConvert(Type typeToConvert)
     {
         return typeToConvert.IsInterface;
-    }
-
-    private static Type? GetConcreteType(Type interfaceType)
-    {
-        if (!interfaceType.IsInterface)
-        {
-            return null;
-        }
-
-        // Check cache first
-        return _typeCache.GetOrAdd(interfaceType, FindConcreteType);
-    }
-
-    private static Type? FindConcreteType(Type interfaceType)
-    {
-        // Check known mappings first (for framework types like IHtmlContent)
-        if (_knownMappings.TryGetValue(interfaceType.FullName ?? string.Empty, out Type? knownType))
-        {
-            return knownType;
-        }
-
-        var interfaceName = interfaceType.Name;
-
-        // Check naming convention: ITypeName -> TypeName
-        if (!interfaceName.StartsWith("I") || interfaceName.Length <= 1)
-        {
-            return null;
-        }
-
-        var concreteTypeName = $"{interfaceType.Namespace}.{interfaceName[1..]}";
-
-        // Search in loaded assemblies (skip dynamic assemblies for performance)
-        IEnumerable<Assembly> assemblies = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.FullName));
-
-        foreach (Assembly? assembly in assemblies)
-        {
-            try
-            {
-                Type? concreteType = assembly.GetType(concreteTypeName, throwOnError: false);
-
-                // Verify the type implements the interface
-                if (concreteType != null && interfaceType.IsAssignableFrom(concreteType) && !concreteType.IsAbstract)
-                {
-                    return concreteType;
-                }
-            }
-            catch
-            {
-                // Silently skip assemblies that can't be scanned
-            }
-        }
-
-        return null;
     }
 
     private static JsonSerializerOptions CreateOptionsWithoutThisConverter(JsonSerializerOptions original)

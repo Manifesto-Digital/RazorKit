@@ -1,5 +1,6 @@
 using Manifesto.RazorKit.Filters;
 using Manifesto.RazorKit.Models;
+using Manifesto.RazorKit.Registry;
 using Manifesto.RazorKit.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -18,21 +19,25 @@ namespace Manifesto.RazorKit.Pages;
 [IgnoreAntiforgeryToken]
 [ResponseHeaders]
 [MethodCheck]
+[RateLimit]
 [RequestProtection]
 public class RazorKitPageModel : PageModel
 {
     private readonly ComponentDiscoveryService _componentDiscovery;
     private readonly ComponentPropertyService _propertyService;
     private readonly ComponentStoryService _storyService;
+    private readonly RazorKitRegistry _registry;
 
     public RazorKitPageModel(
         ComponentDiscoveryService componentDiscovery,
         ComponentPropertyService propertyService,
-        ComponentStoryService storyService)
+        ComponentStoryService storyService,
+        RazorKitRegistry registry)
     {
         _componentDiscovery = componentDiscovery;
         _propertyService = propertyService;
         _storyService = storyService;
+        _registry = registry;
     }
 
     public List<ComponentInfo> Components { get; private set; } = new();
@@ -81,7 +86,7 @@ public class RazorKitPageModel : PageModel
 
             SelectedStory = stories.FirstOrDefault(s => s.Name.Equals(storyName, StringComparison.OrdinalIgnoreCase));
 
-            PropsType = FindPropsType(SelectedComponent.Name);
+            PropsType = _registry.FindPropsType(SelectedComponent.Name);
             if (PropsType != null)
             {
                 ComponentProperties = _propertyService.GetComponentProperties(PropsType).ToArray();
@@ -121,30 +126,4 @@ public class RazorKitPageModel : PageModel
     /// A props instance built from the current defaults, for the code snippet in the Controls panel.
     /// </summary>
     public object CreateDefaultsInstance() => _propertyService.CreateComponentInstance(PropsType!, DefaultValues);
-
-    private static Type? FindPropsType(string componentName)
-    {
-        var assemblies = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location));
-
-        foreach (var assembly in assemblies)
-        {
-            try
-            {
-                var propsType = assembly.GetTypes()
-                    .FirstOrDefault(t => t.Name.Equals($"{componentName}Props", StringComparison.OrdinalIgnoreCase));
-
-                if (propsType != null)
-                {
-                    return propsType;
-                }
-            }
-            catch (Exception)
-            {
-                continue;
-            }
-        }
-
-        return null;
-    }
 }

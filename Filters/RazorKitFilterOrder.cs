@@ -13,7 +13,15 @@ internal static class RazorKitFilterOrder
     // Page only. After the headers filter, so the 405 still carries no-store.
     public const int MethodCheck = -9_000;
 
+    // After the method check, before request protection: a request over its limit is turned away
+    // before any further per-request work (such as reading the body) is done for it.
+    public const int RateLimit = -8_000;
+
     // A resource filter, so it runs before model binding reads the body; after the headers
     // filter, so its 403, 413 and 415 responses still carry no-store.
     public const int RequestProtection = -7_000;
+
+    // After request protection, so a request that fails it, or whose body is still being read,
+    // never holds one of the few render slots.
+    public const int ConcurrencyLimit = -6_000;
 }

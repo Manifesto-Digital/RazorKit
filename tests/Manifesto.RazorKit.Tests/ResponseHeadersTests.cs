@@ -1,9 +1,11 @@
 using System.Net;
 using System.Text;
+using Manifesto.RazorKit.Tests.Components.Atoms.Waiting;
 using static Manifesto.RazorKit.Tests.Support.RazorKitRequests;
 
 namespace Manifesto.RazorKit.Tests;
 
+[Collection(WaitingGateCollection.Name)]
 public class ResponseHeadersTests
 {
     private const string EnforcedCsp = "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'";
@@ -58,6 +60,49 @@ public class ResponseHeadersTests
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.Equal(TestHost.HostErrorBody, await response.Content.ReadAsStringAsync());
         AssertRazorKitHeaders(response);
+    }
+
+    [Fact]
+    public async Task Rate_limited_429_carries_all_three_headers()
+    {
+        await using var host = await TestHost.StartAsync(new TestHostOptions
+        {
+            ConfigureRazorKit = o => o.RateLimit.Page.Burst = 1
+        });
+
+        await host.Client.GetAsync("/razorkit/button/default");
+        var response = await host.Client.GetAsync("/razorkit/button/default");
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        AssertRazorKitHeaders(response);
+    }
+
+    [Fact]
+    public async Task Saturated_503_carries_all_three_headers()
+    {
+        await using var host = await TestHost.StartAsync(new TestHostOptions
+        {
+            ConfigureRazorKit = o => o.RateLimit.MaxConcurrentRenders = 1
+        });
+        WaitingGate.Arm();
+        try
+        {
+            var held = host.Client.SendAsync(WithValidProtection(
+                new HttpRequestMessage(HttpMethod.Post, "/razorkit-preview/preview/waiting/default")));
+            await WaitingGate.Entered.WaitAsync(TimeSpan.FromSeconds(10));
+
+            var response = await host.Client.SendAsync(WithValidProtection(
+                new HttpRequestMessage(HttpMethod.Post, "/razorkit-preview/preview/button/default")));
+
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+            AssertRazorKitHeaders(response);
+            WaitingGate.Release();
+            await held;
+        }
+        finally
+        {
+            WaitingGate.Release();
+        }
     }
 
     [Theory]
