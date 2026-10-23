@@ -22,7 +22,9 @@
 - The public constructors of RazorKit's controller, page model and services take additional parameters (affects only code that constructs them directly).
 - When two stories share a name, the first one now wins.
 - Rate-limit rejection logs identify clients by a short per-process tag, not by IP address.
-- The preview's invalid-JSON message is now a fixed message; details are shown only in Development.</PackageReleaseNotes>
+- The preview's invalid-JSON message is now a fixed message; details are shown only in Development.
+- Live editing in the Controls panel needs HTTPS, or localhost.
+- If your site has its own Pages/RazorKit.cshtml (for example from an in-repo copy of RazorKit), delete it: it overrides the package's page.</PackageReleaseNotes>
     <Authors>Manifesto Digital</Authors>
     <Company>Manifesto Digital</Company>
     <Description>A component preview and development tool for ASP.NET Core Razor components. Provides an interactive UI for developing, testing, and documenting reusable Razor components, inspired by Storybook.</Description>
