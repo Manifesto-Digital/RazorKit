@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Manifesto.RazorKit.Converters;
 using Manifesto.RazorKit.Filters;
@@ -9,6 +10,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewEngines;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Manifesto.RazorKit.Controllers;
 
@@ -21,7 +24,7 @@ namespace Manifesto.RazorKit.Controllers;
 [RateLimit]
 [RequestProtection]
 [ConcurrencyLimit]
-public class RazorKitController : Controller
+public partial class RazorKitController : Controller
 {
     // Props come from a person editing the Controls panel; nothing legitimate nests deeper.
     private static readonly JsonDocumentOptions PropsJsonDocumentOptions = new() { MaxDepth = 16 };
@@ -32,6 +35,8 @@ public class RazorKitController : Controller
     private readonly ICompositeViewEngine _viewEngine;
     private readonly RazorKitOptions _options;
     private readonly RazorKitRegistry _registry;
+    private readonly IHostEnvironment _environment;
+    private readonly ILogger<RazorKitController> _logger;
 
     public RazorKitController(
         ComponentDiscoveryService componentDiscovery,
@@ -39,7 +44,9 @@ public class RazorKitController : Controller
         ComponentStoryService storyService,
         ICompositeViewEngine viewEngine,
         RazorKitOptions options,
-        RazorKitRegistry registry)
+        RazorKitRegistry registry,
+        IHostEnvironment environment,
+        ILogger<RazorKitController> logger)
     {
         _componentDiscovery = componentDiscovery;
         _propertyService = propertyService;
@@ -47,6 +54,8 @@ public class RazorKitController : Controller
         _viewEngine = viewEngine;
         _options = options;
         _registry = registry;
+        _environment = environment;
+        _logger = logger;
     }
 
     // GET takes no props from any source, so only a POST that passed request protection can
@@ -70,14 +79,14 @@ public class RazorKitController : Controller
 
         if (component == null)
         {
-            return Content(CreatePreviewHtml("<div style='padding: 2rem;'>Component not found</div>"), "text/html");
+            return ErrorContent("Component not found.", detail: null);
         }
 
         Type? propsType = _registry.FindPropsType(componentName);
 
         if (propsType == null)
         {
-            return Content(CreatePreviewHtml("<div style='padding: 2rem;'>Props type not found</div>"), "text/html");
+            return ErrorContent("Props type not found.", detail: null);
         }
 
         try
@@ -95,7 +104,8 @@ public class RazorKitController : Controller
                 }
                 catch (JsonException jsonEx)
                 {
-                    return Content(CreatePreviewHtml($"<div style='padding: 2rem; color: red;'><p><strong>Invalid JSON:</strong> {jsonEx.Message}</p></div>"), "text/html");
+                    LogInvalidProps(_logger, componentName, jsonEx.GetType().Name);
+                    return ErrorContent("The props are not valid JSON.", jsonEx.Message);
                 }
             }
             else
@@ -122,12 +132,8 @@ public class RazorKitController : Controller
         }
         catch (Exception ex)
         {
-            var errorHtml = CreatePreviewHtml($@"<div style='padding: 2rem; color: red;'>
-                <p><strong>Error rendering component:</strong></p>
-                <p>{ex.Message}</p>
-                <pre style='font-size: 0.75rem; margin-top: 1rem; overflow: auto;'>{ex.StackTrace}</pre>
-            </div>");
-            return Content(errorHtml, "text/html");
+            LogRenderFailed(_logger, componentName, ex);
+            return ErrorContent("The component could not be rendered.", ex.Message);
         }
     }
 
@@ -200,7 +206,7 @@ public class RazorKitController : Controller
                             }
                             catch (JsonException jsonEx)
                             {
-                                System.Diagnostics.Debug.WriteLine($"Error deserializing property {property.Name}: {jsonEx.Message}");
+                                LogPropDeserializeFailed(_logger, property.Name, jsonEx.GetType().Name);
                                 // Continue with other properties
                                 continue;
                             }
@@ -216,7 +222,7 @@ public class RazorKitController : Controller
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error deserializing props: {ex.Message}");
+            LogPropsDeserializeFailed(_logger, ex.GetType().Name);
         }
 
         return propertyValues;
@@ -245,9 +251,8 @@ public class RazorKitController : Controller
 
             if (viewResult.View == null)
             {
-                return $@"<div style='padding: 2rem; color: red;'>
-                    <p><strong>View not found:</strong> {viewPath}</p>
-                </div>";
+                LogViewNotFound(_logger, viewPath);
+                return ErrorHtml("The component view was not found.", viewPath);
             }
 
             var viewContext = new ViewContext(
@@ -264,12 +269,47 @@ public class RazorKitController : Controller
         }
         catch (Exception ex)
         {
-            return $@"<div style='padding: 2rem; color: red;'>
-                <p><strong>Error rendering view:</strong></p>
-                <p>{ex.Message}</p>
-            </div>";
+            LogViewFailed(_logger, viewPath, ex);
+            return ErrorHtml("The component view could not be rendered.", ex.Message);
         }
     }
+
+    // Every error the preview renders goes through here. Outside Development the response carries
+    // only the fixed message: exception text can quote request data or server internals. In
+    // Development the detail is shown HTML-encoded. Stack traces only ever go to the log.
+    private string ErrorHtml(string message, string? detail)
+    {
+        var html = $"<div style='padding: 2rem; color: red;'><p><strong>{HtmlEncoder.Default.Encode(message)}</strong></p>";
+        if (detail != null)
+        {
+            html += _environment.IsDevelopment()
+                ? $"<p>{HtmlEncoder.Default.Encode(detail)}</p>"
+                : "<p>Check the application log for details.</p>";
+        }
+
+        return html + "</div>";
+    }
+
+    private ContentResult ErrorContent(string message, string? detail) =>
+        Content(CreatePreviewHtml(ErrorHtml(message, detail)), "text/html");
+
+    [LoggerMessage(EventId = 20, Level = LogLevel.Warning, Message = "Preview props for component {ComponentName} were not valid JSON ({ExceptionType}).")]
+    private static partial void LogInvalidProps(ILogger logger, string componentName, string exceptionType);
+
+    [LoggerMessage(EventId = 21, Level = LogLevel.Error, Message = "Rendering the preview for component {ComponentName} failed.")]
+    private static partial void LogRenderFailed(ILogger logger, string componentName, Exception exception);
+
+    [LoggerMessage(EventId = 22, Level = LogLevel.Error, Message = "Rendering the view {ViewPath} failed.")]
+    private static partial void LogViewFailed(ILogger logger, string viewPath, Exception exception);
+
+    [LoggerMessage(EventId = 23, Level = LogLevel.Warning, Message = "The view {ViewPath} was not found.")]
+    private static partial void LogViewNotFound(ILogger logger, string viewPath);
+
+    [LoggerMessage(EventId = 24, Level = LogLevel.Debug, Message = "Property {PropertyName} could not be deserialized and was skipped ({ExceptionType}).")]
+    private static partial void LogPropDeserializeFailed(ILogger logger, string propertyName, string exceptionType);
+
+    [LoggerMessage(EventId = 25, Level = LogLevel.Warning, Message = "Preview props could not be fully deserialized ({ExceptionType}).")]
+    private static partial void LogPropsDeserializeFailed(ILogger logger, string exceptionType);
 
     private string CreatePreviewHtml(string content)
     {
@@ -283,6 +323,8 @@ public class RazorKitController : Controller
         var cssLink = !string.IsNullOrEmpty(cssPath)
             ? $"<link rel=\"stylesheet\" href=\"{cssPath}\" />"
             : string.Empty;
+        // PathBase keeps the bundled script reachable when the host is mounted under a sub-path.
+        var axePath = HtmlEncoder.Default.Encode($"{Request.PathBase}/_content/Manifesto.RazorKit/lib/axe-core/axe.min.js");
         var jsScript = !string.IsNullOrEmpty(jsPath)
             ? $"<script src=\"{jsPath}\"></script>"
             : string.Empty;
@@ -300,7 +342,7 @@ public class RazorKitController : Controller
             document.documentElement.setAttribute('data-theme', theme);
         }});
     </script>
-    <script src=""https://unpkg.com/axe-core@4.8.2/axe.min.js""></script>
+    <script src=""{axePath}""></script>
     <style>
         body {{
             margin: 0;
