@@ -74,6 +74,21 @@ public class EndpointDiscoveryTests
         }
     }
 
+    [Fact]
+    public async Task Every_RazorKit_action_and_page_carries_the_rate_limit_filter()
+    {
+        await using var host = await TestHost.StartAsync();
+
+        var descriptors = await RazorKitDescriptorsAsync(host);
+
+        Assert.Contains(descriptors, d => d is ControllerActionDescriptor);
+        Assert.Contains(descriptors, d => d is CompiledPageActionDescriptor);
+        foreach (var descriptor in descriptors)
+        {
+            Assert.Contains(descriptor.FilterDescriptors, f => f.Filter is RateLimitAttribute);
+        }
+    }
+
     // A page accepts every method, so every page is a non-GET path. An action is one unless its
     // HTTP method constraint limits it to GET or HEAD.
     // This reads declared metadata only and cannot see a host rewriting the method at runtime;
@@ -115,29 +130,74 @@ public class EndpointDiscoveryTests
         Assert.All(pages, p => Assert.Contains(p.FilterDescriptors, f => f.Filter is MethodCheckAttribute));
     }
 
+    private static readonly Type[] DocumentedOrder =
+    {
+        typeof(ResponseHeadersAttribute),
+        typeof(MethodCheckAttribute),
+        typeof(RateLimitAttribute),
+        typeof(RequestProtectionAttribute),
+        typeof(ConcurrencyLimitAttribute)
+    };
+
+    private static bool IsRazorKitFilter(object f) =>
+        f is ResponseHeadersAttribute or MethodCheckAttribute or RateLimitAttribute or RequestProtectionAttribute or ConcurrencyLimitAttribute;
+
+    [Fact]
+    public void Filter_order_constants_have_the_documented_values()
+    {
+        Assert.Equal(-10_000, RazorKitFilterOrder.ResponseHeaders);
+        Assert.Equal(-9_000, RazorKitFilterOrder.MethodCheck);
+        Assert.Equal(-8_000, RazorKitFilterOrder.RateLimit);
+        Assert.Equal(-7_000, RazorKitFilterOrder.RequestProtection);
+        Assert.Equal(-6_000, RazorKitFilterOrder.ConcurrencyLimit);
+    }
+
     [Fact]
     public async Task RazorKit_filters_run_in_the_documented_order()
     {
         await using var host = await TestHost.StartAsync();
 
-        foreach (var descriptor in await RazorKitDescriptorsAsync(host))
+        var descriptors = await RazorKitDescriptorsAsync(host);
+        Assert.NotEmpty(descriptors);
+
+        foreach (var descriptor in descriptors)
         {
             // MVC sorts filters by Order, then by scope; the sorted list is the run order.
             var razorKitFilters = descriptor.FilterDescriptors
                 .OrderBy(f => f.Order).ThenBy(f => f.Scope)
                 .Select(f => f.Filter)
-                .Where(f => f is ResponseHeadersAttribute or MethodCheckAttribute or RequestProtectionAttribute)
+                .Where(IsRazorKitFilter)
                 .Select(f => f.GetType())
                 .ToList();
-            var expected = new[] { typeof(ResponseHeadersAttribute), typeof(MethodCheckAttribute), typeof(RequestProtectionAttribute) }
-                .Where(razorKitFilters.Contains)
-                .ToList();
+            var expected = DocumentedOrder.Where(razorKitFilters.Contains).ToList();
 
             Assert.Equal(expected, razorKitFilters);
-            Assert.True(RazorKitFilterOrder.ResponseHeaders < RazorKitFilterOrder.MethodCheck);
-            Assert.True(RazorKitFilterOrder.MethodCheck < RazorKitFilterOrder.RequestProtection);
-            Assert.All(descriptor.FilterDescriptors.Where(f => f.Filter is ResponseHeadersAttribute or MethodCheckAttribute or RequestProtectionAttribute),
+            Assert.All(descriptor.FilterDescriptors.Where(f => IsRazorKitFilter(f.Filter)),
                 f => Assert.True(f.Order < 0, "RazorKit filters must order ahead of MVC's built-in filters."));
+
+            // The controller carries every filter but the page-only method check; the page carries
+            // every filter but the render backstop.
+            var expectedSet = descriptor is CompiledPageActionDescriptor
+                ? DocumentedOrder.Where(t => t != typeof(ConcurrencyLimitAttribute))
+                : DocumentedOrder.Where(t => t != typeof(MethodCheckAttribute));
+            Assert.Equal(expectedSet.ToList(), razorKitFilters);
+        }
+    }
+
+    [Fact]
+    public async Task The_rendering_controller_carries_the_concurrency_filter_after_the_rate_limit()
+    {
+        await using var host = await TestHost.StartAsync();
+
+        var actions = (await RazorKitDescriptorsAsync(host)).OfType<ControllerActionDescriptor>().ToList();
+
+        Assert.NotEmpty(actions);
+        foreach (var action in actions)
+        {
+            var ordered = action.FilterDescriptors.OrderBy(f => f.Order).Select(f => f.Filter).ToList();
+            Assert.Contains(ordered, f => f is ConcurrencyLimitAttribute);
+            Assert.True(
+                ordered.FindIndex(f => f is RateLimitAttribute) < ordered.FindIndex(f => f is ConcurrencyLimitAttribute));
         }
     }
 
@@ -160,7 +220,6 @@ public class EndpointDiscoveryTests
         var mvcOptions = host.App.Services
             .GetRequiredService<Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Mvc.MvcOptions>>().Value;
 
-        static bool IsRazorKitFilter(object f) => f is ResponseHeadersAttribute or MethodCheckAttribute or RequestProtectionAttribute;
         Assert.DoesNotContain(mvcOptions.Filters, f =>
             IsRazorKitFilter(f) ||
             (f is Microsoft.AspNetCore.Mvc.Filters.FilterDescriptor fd && IsRazorKitFilter(fd.Filter)));

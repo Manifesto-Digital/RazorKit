@@ -29,4 +29,52 @@ public class RazorKitOptions
 
     // Keeps the derived body cap (a multiple of this) well inside int and long arithmetic.
     internal const int MaxMaxPropsJsonBytes = 16 * 1024 * 1024;
+
+    /// <summary>
+    /// Per-client request limits for RazorKit's own endpoints. Enforced by RazorKit itself, so they
+    /// apply whether or not the host registers ASP.NET Core's rate limiter.
+    /// </summary>
+    public RazorKitRateLimitOptions RateLimit { get; } = new();
+}
+
+/// <summary>
+/// Request limits for RazorKit's endpoints. Clients are told apart by the connection's remote
+/// address only. A host behind a proxy must configure forwarded headers itself, or every visitor
+/// shares the proxy's address and therefore one bucket.
+/// </summary>
+public class RazorKitRateLimitOptions
+{
+    /// <summary>
+    /// Limit for page loads: the explorer shell and GET previews.
+    /// </summary>
+    public RazorKitBucketOptions Page { get; } = new(permitsPerMinute: 60, burst: 20);
+
+    /// <summary>
+    /// Limit for render requests: the preview POST. Looser than <see cref="Page"/> because the
+    /// explorer re-renders on every debounced keystroke in the Controls panel.
+    /// </summary>
+    public RazorKitBucketOptions Render { get; } = new(permitsPerMinute: 120, burst: 30);
+
+    /// <summary>
+    /// Renders allowed to run at once across all clients; further renders are answered with 503.
+    /// Bounds total render work when many clients, or clients that share an address, are active.
+    /// </summary>
+    public int MaxConcurrentRenders { get; set; } = Math.Max(1, 2 * Environment.ProcessorCount);
+}
+
+/// <summary>
+/// A token bucket: <see cref="Burst"/> requests can be made at once, and the bucket refills at
+/// <see cref="PermitsPerMinute"/>.
+/// </summary>
+public class RazorKitBucketOptions
+{
+    public RazorKitBucketOptions(int permitsPerMinute, int burst)
+    {
+        PermitsPerMinute = permitsPerMinute;
+        Burst = burst;
+    }
+
+    public int PermitsPerMinute { get; set; }
+
+    public int Burst { get; set; }
 }

@@ -1,0 +1,5 @@
+@model Manifesto.RazorKit.Tests.Components.Atoms.Waiting.WaitingProps
+@{
+    await Manifesto.RazorKit.Tests.Components.Atoms.Waiting.WaitingGate.PassAsync();
+}
+<span>@Model.Label</span>

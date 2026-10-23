@@ -1,3 +1,4 @@
+using System.Net;
 using Manifesto.RazorKit.Extensions;
 using Manifesto.RazorKit.Models;
 using Microsoft.AspNetCore.Builder;
@@ -20,7 +21,7 @@ public sealed record TestHostOptions
     /// <summary>A Content-Security-Policy the host's own middleware sets before RazorKit runs.</summary>
     public string? HostContentSecurityPolicy { get; init; }
 
-    /// <summary>Applied after the fixture's own RazorKit settings.</summary>
+    /// <summary>Applied after the fixture's own RazorKit settings, for example to shrink a rate limit.</summary>
     public Action<RazorKitOptions>? ConfigureRazorKit { get; init; }
 
     public string EnvironmentName { get; init; } = Environments.Production;
@@ -36,6 +37,12 @@ public sealed record TestHostOptions
 
     /// <summary>Extra endpoint mapping, after the host's MapControllers and MapRazorPages.</summary>
     public Action<WebApplication>? MapEndpoints { get; init; }
+
+    /// <summary>Adds the host's own AddRateLimiter/UseRateLimiter, with a distinct rejection status.</summary>
+    public bool HostRateLimiter { get; init; }
+
+    /// <summary>Adds the host's <c>UseHttpMethodOverride</c> with the given options, after routing has selected the endpoint.</summary>
+    public HttpMethodOverrideOptions? HttpMethodOverride { get; init; }
 }
 
 /// <summary>
@@ -46,6 +53,15 @@ public sealed record TestHostOptions
 public sealed class TestHost : IAsyncDisposable
 {
     public const string HostErrorBody = "host error page";
+
+    /// <summary>
+    /// Sets the connection's remote address for a request: an IP literal, or "null" for a
+    /// connection with no address. Stands in for the address the server would report.
+    /// </summary>
+    public const string RemoteIpHeader = "X-Test-Remote-Ip";
+
+    /// <summary>The status the host's own rate limiter rejects with, so it cannot be mistaken for RazorKit's 429.</summary>
+    public const int HostRateLimiterRejection = StatusCodes.Status418ImATeapot;
 
     private TestHost(WebApplication app, HttpClient client)
     {
@@ -87,9 +103,40 @@ public sealed class TestHost : IAsyncDisposable
             });
         }
 
+        if (options.HostRateLimiter)
+        {
+            builder.Services.AddRateLimiter(o =>
+            {
+                o.RejectionStatusCode = HostRateLimiterRejection;
+                o.GlobalLimiter = System.Threading.RateLimiting.PartitionedRateLimiter.Create<HttpContext, string>(
+                    _ => System.Threading.RateLimiting.RateLimitPartition.GetConcurrencyLimiter("host",
+                        _ => new System.Threading.RateLimiting.ConcurrencyLimiterOptions { PermitLimit = 1000, QueueLimit = 0 }));
+            });
+        }
+
         options.ConfigureServices?.Invoke(builder.Services);
 
         var app = builder.Build();
+
+        app.Use(async (context, next) =>
+        {
+            if (context.Request.Headers.TryGetValue(RemoteIpHeader, out var value))
+            {
+                context.Connection.RemoteIpAddress = value == "null" ? null : IPAddress.Parse(value.ToString());
+            }
+
+            await next();
+        });
+
+        if (options.HttpMethodOverride is { } methodOverride)
+        {
+            app.UseHttpMethodOverride(methodOverride);
+        }
+
+        if (options.HostRateLimiter)
+        {
+            app.UseRateLimiter();
+        }
 
         if (options.UseExceptionHandler)
         {

@@ -1,5 +1,5 @@
-using System.Reflection;
 using Manifesto.RazorKit.Models;
+using Manifesto.RazorKit.Registry;
 
 namespace Manifesto.RazorKit.Services;
 
@@ -8,11 +8,11 @@ namespace Manifesto.RazorKit.Services;
 /// </summary>
 public class ComponentStoryService
 {
-    private readonly Dictionary<string, IComponentStories> _discoveredStories;
+    private readonly RazorKitRegistry _registry;
 
-    public ComponentStoryService()
+    public ComponentStoryService(RazorKitRegistry registry)
     {
-        _discoveredStories = DiscoverStoryFiles();
+        _registry = registry;
     }
 
     /// <summary>
@@ -20,74 +20,22 @@ public class ComponentStoryService
     /// </summary>
     public List<ComponentStory> GetStoriesForComponent(string componentName)
     {
-        // Try to use discovered story files from any loaded assembly
-        if (_discoveredStories.TryGetValue(componentName.ToLower(), out IComponentStories? storyClass))
+        Type? storiesType = _registry.FindStoriesType(componentName);
+        if (storiesType == null)
         {
-            try
-            {
-                return storyClass.GetStories();
-            }
-            catch (Exception)
-            {
-                // Return empty list if there's an error loading stories
-                return new List<ComponentStory>();
-            }
+            return new List<ComponentStory>();
         }
-
-        // Return empty list if no stories found
-        return new List<ComponentStory>();
-    }
-
-    private Dictionary<string, IComponentStories> DiscoverStoryFiles()
-    {
-        var stories = new Dictionary<string, IComponentStories>();
 
         try
         {
-            // Scan all loaded assemblies for component stories
-            IEnumerable<Assembly> assemblies = AppDomain.CurrentDomain.GetAssemblies()
-                .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location));
-
-            foreach (Assembly assembly in assemblies)
-            {
-                try
-                {
-                    // Find all types that implement IComponentStories
-                    var storyTypes = assembly.GetTypes()
-                        .Where(t => typeof(IComponentStories).IsAssignableFrom(t) &&
-                                   !t.IsInterface &&
-                                   !t.IsAbstract)
-                        .ToList();
-
-                    foreach (Type storyType in storyTypes)
-                    {
-                        try
-                        {
-                            // Create instance of the story class
-                            if (Activator.CreateInstance(storyType) is IComponentStories instance)
-                            {
-                                stories[instance.ComponentName.ToLower()] = instance;
-                            }
-                        }
-                        catch (Exception)
-                        {
-                            // Skip this story class if it can't be instantiated
-                            continue;
-                        }
-                    }
-                }
-                catch (Exception)
-                {
-                    // Skip assemblies that can't be scanned
-                    continue;
-                }
-            }
+            // A new instance every call. Stories pass live references into the props a view
+            // receives, so reusing an instance would let one request's mutations reach the next.
+            return ((IComponentStories)Activator.CreateInstance(storiesType)!).GetStories();
         }
         catch (Exception)
         {
-            // If discovery fails, return empty dictionary
+            // Return empty list if there's an error loading stories
+            return new List<ComponentStory>();
         }
-
-        return stories;
     }
 }

@@ -5,6 +5,7 @@ using System.Text.Json;
 using Manifesto.RazorKit.Converters;
 using Manifesto.RazorKit.Helpers;
 using Manifesto.RazorKit.Models;
+using Manifesto.RazorKit.Registry;
 
 namespace Manifesto.RazorKit.Services;
 
@@ -13,6 +14,13 @@ namespace Manifesto.RazorKit.Services;
 /// </summary>
 public class ComponentPropertyService
 {
+    private readonly RazorKitRegistry _registry;
+
+    public ComponentPropertyService(RazorKitRegistry registry)
+    {
+        _registry = registry;
+    }
+
     /// <summary>
     /// Get metadata for all properties of a component props type
     /// </summary>
@@ -246,7 +254,7 @@ public class ComponentPropertyService
                     var options = new JsonSerializerOptions
                     {
                         PropertyNameCaseInsensitive = true,
-                        Converters = { new InterfaceToConcreteConverter() }
+                        Converters = { new InterfaceToConcreteConverter(_registry) }
                     };
                     return JsonSerializer.Deserialize(jsonString, targetType, options);
                 }
@@ -264,7 +272,7 @@ public class ComponentPropertyService
                     var options = new JsonSerializerOptions
                     {
                         PropertyNameCaseInsensitive = true,
-                        Converters = { new InterfaceToConcreteConverter() }
+                        Converters = { new InterfaceToConcreteConverter(_registry) }
                     };
                     return JsonSerializer.Deserialize(jsonElement.GetRawText(), targetType, options);
                 }
