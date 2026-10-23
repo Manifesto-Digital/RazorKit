@@ -1,3 +1,4 @@
+using Manifesto.RazorKit.Filters;
 using Manifesto.RazorKit.Models;
 using Manifesto.RazorKit.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +17,8 @@ public static class ServiceCollectionExtensions
         var options = new RazorKitOptions();
         configure(options);
         services.AddSingleton(options);
+
+        services.AddSingleton<ResponseHeadersFilter>();
 
         services.AddScoped<ComponentDiscoveryService>();
         services.AddScoped<ComponentPropertyService>();

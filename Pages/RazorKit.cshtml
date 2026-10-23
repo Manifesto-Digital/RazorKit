@@ -1,13 +1,9 @@
 @page "/razorkit/{componentName?}/{storyName?}"
-@using Manifesto.RazorKit.Services
 @using Manifesto.RazorKit.Models
 @using System.Reflection
 @using System.Text.Json
 @using Microsoft.AspNetCore.Html
-@inject ComponentDiscoveryService ComponentDiscovery
-@inject ComponentPropertyService PropertyService
-@inject ComponentStoryService StoryService
-@model dynamic
+@model Manifesto.RazorKit.Pages.RazorKitPageModel
 
 @functions {
     private string SerializePropertyValue(object? value)
@@ -29,94 +25,12 @@
 
 @{
     ViewBag.Title = "RazorKit";
-    var components = ComponentDiscovery.DiscoverComponents();
-    var componentName = ViewContext.RouteData.Values["componentName"]?.ToString();
-    var storyName = ViewContext.RouteData.Values["storyName"]?.ToString();
-
-    if (string.IsNullOrEmpty(componentName) && components.Any())
-    {
-        var firstComponent = components.First();
-        var firstComponentStories = StoryService.GetStoriesForComponent(firstComponent.Name);
-        var firstStory = firstComponentStories.FirstOrDefault();
-
-        var redirectUrl = firstStory != null
-            ? $"/razorkit/{firstComponent.Name.ToLower()}/{firstStory.Name.ToLower()}"
-            : $"/razorkit/{firstComponent.Name.ToLower()}";
-
-        Response.Redirect(redirectUrl);
-        return;
-    }
-
-    var selectedComponent = components.FirstOrDefault(c => c.Name.Equals(componentName, StringComparison.OrdinalIgnoreCase));
-
-    ComponentPropertyInfo[] properties = Array.Empty<ComponentPropertyInfo>();
-    Dictionary<string, object> defaultValues = new Dictionary<string, object>();
-    List<ComponentStory> stories = new List<ComponentStory>();
-    ComponentStory? selectedStory = null;
-    Type? propsType = null;
-
-    if (selectedComponent != null)
-    {
-        stories = StoryService.GetStoriesForComponent(selectedComponent.Name);
-
-        if (string.IsNullOrEmpty(storyName) && stories.Any())
-        {
-            var firstStory = stories.First();
-            var redirectUrl = $"/razorkit/{selectedComponent.Name.ToLower()}/{firstStory.Name.ToLower()}";
-            Response.Redirect(redirectUrl);
-            return;
-        }
-
-        selectedStory = stories.FirstOrDefault(s => s.Name.Equals(storyName, StringComparison.OrdinalIgnoreCase));
-
-        var assemblies = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location));
-
-        foreach (var assembly in assemblies)
-        {
-            try
-            {
-                propsType = assembly.GetTypes()
-                    .FirstOrDefault(t => t.Name.Equals($"{selectedComponent.Name}Props", StringComparison.OrdinalIgnoreCase));
-
-                if (propsType != null)
-                    break;
-            }
-            catch (Exception)
-            {
-                continue;
-            }
-        }
-
-        if (propsType != null)
-        {
-            properties = PropertyService.GetComponentProperties(propsType).ToArray();
-
-            if (selectedStory != null)
-            {
-                defaultValues = selectedStory.Properties.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-
-                var componentDefaults = PropertyService.GetDefaultValues(propsType);
-                foreach (var prop in properties)
-                {
-                    if (!defaultValues.ContainsKey(prop.Name))
-                    {
-                        defaultValues[prop.Name] = componentDefaults.GetValueOrDefault(prop.Name) ?? prop.DefaultValue ?? new object();
-                    }
-                }
-            }
-            else
-            {
-                defaultValues = PropertyService.GetDefaultValues(propsType);
-            }
-        }
-    }
-
-    string initialIframeUrl = "";
-    if (selectedComponent != null)
-    {
-        initialIframeUrl = $"/razorkit-preview/preview/{selectedComponent.Name.ToLower()}/{selectedStory?.Name.ToLower() ?? "default"}";
-    }
+    var components = Model.Components;
+    var selectedComponent = Model.SelectedComponent;
+    var selectedStory = Model.SelectedStory;
+    var properties = Model.ComponentProperties;
+    var defaultValues = Model.DefaultValues;
+    var initialIframeUrl = Model.InitialIframeUrl;
 }
 
 <!DOCTYPE html>
@@ -824,7 +738,7 @@
                             <div class="razorkit-component-group-title">@group.Key</div>
                             @foreach (var component in group.OrderBy(c => c.Name))
                             {
-                                var componentStories = StoryService.GetStoriesForComponent(component.Name);
+                                var componentStories = Model.GetStories(component.Name);
                                 var isComponentSelected = selectedComponent?.Name == component.Name;
 
                                 <div class="razorkit-component-section">
@@ -1017,7 +931,7 @@
                         <div class="razorkit-control-section-title">Component Code</div>
                         <div class="razorkit-component-code" id="component-code">
                             @{
-                                var codeInstance = PropertyService.CreateComponentInstance(propsType!, defaultValues);
+                                var codeInstance = Model.CreateDefaultsInstance();
                                 var propsJson = System.Text.Json.JsonSerializer.Serialize(codeInstance, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
                             }
                             <div style="color: #059669;">@@await Html.PartialAsync("@selectedComponent.Path", new @(selectedComponent.Name)Props</div>
