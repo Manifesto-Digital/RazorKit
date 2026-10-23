@@ -109,6 +109,8 @@ public class ButtonProps
 }
 ```
 
+Keep each component a pure function of its props: render only from the props it's given, and don't look up content, call services or read the request from a component's view. RazorKit renders components with whatever values are entered in its Controls panel.
+
 ### 3. Create Stories
 
 Define stories to showcase different component states:
@@ -146,7 +148,7 @@ public class ButtonStories : ComponentStoriesBase<ButtonProps>
 
 ### 4. Launch RazorKit
 
-Start your application and navigate to `/razorkit` to view your components.
+Start your application and navigate to `/razorkit` to view your components. Live editing in the Controls panel needs the site to be served over HTTPS, or from `localhost`.
 
 ## Documentation
 
