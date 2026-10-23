@@ -6,19 +6,22 @@ using Manifesto.RazorKit.Converters;
 using Manifesto.RazorKit.Helpers;
 using Manifesto.RazorKit.Models;
 using Manifesto.RazorKit.Registry;
+using Microsoft.Extensions.Logging;
 
 namespace Manifesto.RazorKit.Services;
 
 /// <summary>
 /// Service for inspecting and manipulating component properties
 /// </summary>
-public class ComponentPropertyService
+public partial class ComponentPropertyService
 {
     private readonly RazorKitRegistry _registry;
+    private readonly ILogger<ComponentPropertyService> _logger;
 
-    public ComponentPropertyService(RazorKitRegistry registry)
+    public ComponentPropertyService(RazorKitRegistry registry, ILogger<ComponentPropertyService> logger)
     {
         _registry = registry;
+        _logger = logger;
     }
 
     /// <summary>
@@ -127,7 +130,7 @@ public class ComponentPropertyService
                 catch (Exception ex)
                 {
                     // Log conversion error but continue
-                    System.Diagnostics.Debug.WriteLine($"Error setting property {kvp.Key}: {ex.Message}");
+                    LogPropertyNotSet(_logger, property.Name, ex.GetType().Name);
                 }
             }
         }
@@ -260,7 +263,7 @@ public class ComponentPropertyService
                 }
                 catch (JsonException ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Failed to deserialize collection/complex type from JSON: {ex.Message}");
+                    LogCollectionNotDeserialized(_logger, ex.GetType().Name);
                 }
             }
 
@@ -278,7 +281,7 @@ public class ComponentPropertyService
                 }
                 catch (JsonException ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Failed to deserialize JsonElement: {ex.Message}");
+                    LogJsonElementNotDeserialized(_logger, ex.GetType().Name);
                 }
             }
         }
@@ -286,6 +289,17 @@ public class ComponentPropertyService
         // For complex types, return as-is (they should already be deserialized)
         return value;
     }
+
+    // Messages carry the property name and exception type only. Parse and conversion exception messages quote
+    // the offending input, and prop values come from the Controls panel, so the exception itself is never logged.
+    [LoggerMessage(EventId = 30, Level = LogLevel.Debug, Message = "Property {PropertyName} could not be set from the supplied value ({ExceptionType}).")]
+    private static partial void LogPropertyNotSet(ILogger logger, string propertyName, string exceptionType);
+
+    [LoggerMessage(EventId = 31, Level = LogLevel.Debug, Message = "A string value could not be deserialized to the target collection or complex type ({ExceptionType}).")]
+    private static partial void LogCollectionNotDeserialized(ILogger logger, string exceptionType);
+
+    [LoggerMessage(EventId = 32, Level = LogLevel.Debug, Message = "A JSON value could not be deserialized to the target type ({ExceptionType}).")]
+    private static partial void LogJsonElementNotDeserialized(ILogger logger, string exceptionType);
 
     private string GetDisplayName(PropertyInfo property)
     {

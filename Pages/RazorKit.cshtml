@@ -41,7 +41,6 @@
     <meta name="razorkit-token" content="@Model.RequestToken">
     <title>@ViewBag.Title</title>
     <link rel="stylesheet" href="/css/main.css" />
-    <script src="https://unpkg.com/axe-core@4.8.2/axe.min.js"></script>
     <style>
         .razorkit-page {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -1093,16 +1092,33 @@
 
                const codeDiv = document.getElementById('component-code');
                if (codeDiv) {
-                   let codeContent = '<div style="color: #059669;">@@await Html.PartialAsync("@selectedComponent?.Path", new @(selectedComponent?.Name)Props</div>';
-                   codeContent += '<div style="color: #dc2626;">{</div>';
+                   // Lines are built with textContent: prop values come from the Controls panel and must not be parsed as markup.
+                   const addLine = function (parts, indent) {
+                       const line = document.createElement('div');
+                       if (indent) {
+                           line.style.marginLeft = '1rem';
+                       }
+                       parts.forEach(function (part) {
+                           const span = document.createElement('span');
+                           span.style.color = part[1];
+                           span.textContent = part[0];
+                           line.appendChild(span);
+                       });
+                       return line;
+                   };
+
+                   const lines = [
+                       addLine([['@@await Html.PartialAsync("' + @Json.Serialize(selectedComponent?.Path) + '", new ' + @Json.Serialize(selectedComponent?.Name) + 'Props', '#059669']], false),
+                       addLine([['{', '#dc2626']], false)
+                   ];
 
                    Object.entries(props).forEach(([key, value]) => {
                        const valueStr = typeof value === 'string' ? `"${value}"` : value.toString();
-                       codeContent += `<div style="margin-left: 1rem;"><span style="color: #7c2d12;">${key}</span> = <span style="color: #0369a1;">${valueStr}</span>,</div>`;
+                       lines.push(addLine([[key, '#7c2d12'], [' = ', '#374151'], [valueStr, '#0369a1'], [',', '#374151']], true));
                    });
 
-                   codeContent += '<div style="color: #dc2626;">})</div>';
-                   codeDiv.innerHTML = codeContent;
+                   lines.push(addLine([['})', '#dc2626']], false));
+                   codeDiv.replaceChildren(...lines);
                }
 
                clearA11yResults();
@@ -1149,7 +1165,10 @@
                                displayA11yResults(results);
                            })
                            .catch(function (error) {
-                               summary.innerHTML = '<span class="razorkit-a11y-badge violations">Error running test: ' + error.message + '</span>';
+                               const badge = document.createElement('span');
+                               badge.className = 'razorkit-a11y-badge violations';
+                               badge.textContent = 'Error running test: ' + error.message;
+                               summary.replaceChildren(badge);
                            })
                            .finally(function () {
                                button.disabled = false;
@@ -1241,7 +1260,7 @@
                                        <p><strong>Help:</strong> ${violation.help}</p>
                                        <p><strong>Rule:</strong> ${violation.id}</p>
                                        <p><strong>Elements affected:</strong> ${violation.nodes.length}</p>
-                                       ${violation.helpUrl ? `<p><a href="${violation.helpUrl}" target="_blank" style="color: #3b82f6;">Learn more →</a></p>` : ''}
+                                       ${violation.helpUrl ? `<p><a href="${violation.helpUrl}" target="_blank" rel="noopener noreferrer" style="color: #3b82f6;">Learn more →</a></p>` : ''}
                                    </div>
                                    <div>
                                        <h5 style="margin: 0 0 0.5rem 0; font-size: 0.875rem; font-weight: 600; color: #374151;">Affected Elements:</h5>
