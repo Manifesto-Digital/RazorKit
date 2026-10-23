@@ -11,11 +11,18 @@ using Microsoft.AspNetCore.Mvc.ViewFeatures;
 
 namespace Manifesto.RazorKit.Controllers;
 
-[ApiController]
+// No [ApiController]: its automatic 400 responses are JSON problem details, wrong for an HTML
+// endpoint. [IgnoreAntiforgeryToken] keeps a host's global antiforgery filter off RazorKit;
+// RazorKit's own token is checked by the request-protection filter instead.
 [Route("razorkit-preview")]
+[IgnoreAntiforgeryToken]
 [ResponseHeaders]
+[RequestProtection]
 public class RazorKitController : Controller
 {
+    // Props come from a person editing the Controls panel; nothing legitimate nests deeper.
+    private static readonly JsonDocumentOptions PropsJsonDocumentOptions = new() { MaxDepth = 16 };
+
     private readonly ComponentDiscoveryService _componentDiscovery;
     private readonly ComponentPropertyService _propertyService;
     private readonly ComponentStoryService _storyService;
@@ -36,9 +43,20 @@ public class RazorKitController : Controller
         _options = options;
     }
 
+    // GET takes no props from any source, so only a POST that passed request protection can
+    // change what the preview renders. "Open in new window" uses this GET.
     [HttpGet("preview/{componentName}/{storyName?}")]
+    public Task<IActionResult> Preview([FromRoute] string componentName, [FromRoute] string storyName = "default") =>
+        RenderPreviewAsync(componentName, storyName, propsJson: null);
+
     [HttpPost("preview/{componentName}/{storyName?}")]
-    public async Task<IActionResult> Preview(string componentName, string storyName = "default", [FromForm] string? propsJson = null)
+    public Task<IActionResult> PreviewWithProps(
+        [FromRoute] string componentName,
+        [FromRoute] string storyName = "default",
+        [FromForm] string? propsJson = null) =>
+        RenderPreviewAsync(componentName, storyName, propsJson);
+
+    private async Task<IActionResult> RenderPreviewAsync(string componentName, string storyName, string? propsJson)
     {
         List<ComponentInfo> components = _componentDiscovery.DiscoverComponents();
         ComponentInfo? component = components.FirstOrDefault(c =>
@@ -85,7 +103,7 @@ public class RazorKitController : Controller
                 try
                 {
                     // Deserialize the JSON props
-                    using var jsonDocument = JsonDocument.Parse(propsJson);
+                    using var jsonDocument = JsonDocument.Parse(propsJson, PropsJsonDocumentOptions);
                     propertyValues = DeserializePropsFromJson(jsonDocument.RootElement, propsType);
                 }
                 catch (JsonException jsonEx)

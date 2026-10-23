@@ -1,4 +1,6 @@
 using System.Net;
+using System.Text;
+using static Manifesto.RazorKit.Tests.Support.RazorKitRequests;
 
 namespace Manifesto.RazorKit.Tests;
 
@@ -70,5 +72,55 @@ public class ResponseHeadersTests
 
         var policies = response.Headers.GetValues("Content-Security-Policy").ToArray();
         Assert.Equal(new[] { hostPolicy, EnforcedCsp }, policies);
+    }
+
+    [Fact]
+    public async Task Request_protection_403_carries_all_three_headers()
+    {
+        await using var host = await TestHost.StartAsync();
+
+        var response = await host.Client.SendAsync(RenderPost(cookie: null, field: null, configure: h => h.Add("Sec-Fetch-Site", "cross-site")));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        AssertRazorKitHeaders(response);
+    }
+
+    [Fact]
+    public async Task Page_405_carries_all_three_headers()
+    {
+        await using var host = await TestHost.StartAsync();
+
+        var response = await host.Client.SendAsync(RenderPost(cookie: null, field: null, path: ShellPath));
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        AssertRazorKitHeaders(response);
+    }
+
+    [Fact]
+    public async Task Body_too_large_413_carries_all_three_headers()
+    {
+        await using var host = await TestHost.StartAsync(new TestHostOptions { ConfigureRazorKit = o => o.MaxPropsJsonBytes = 1024 });
+        var token = await LoadShellAsync(host.Client);
+
+        var response = await host.Client.SendAsync(RenderPost(token.CookieValue, token.PageValue, new string('a', 1025)));
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        AssertRazorKitHeaders(response);
+    }
+
+    [Fact]
+    public async Task Unsupported_media_type_415_carries_all_three_headers()
+    {
+        await using var host = await TestHost.StartAsync();
+        var request = new HttpRequestMessage(HttpMethod.Post, PreviewPath)
+        {
+            Content = new StringContent("{}", Encoding.UTF8, "application/json")
+        };
+        request.Headers.Add("Sec-Fetch-Site", "same-origin");
+
+        var response = await host.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+        AssertRazorKitHeaders(response);
     }
 }

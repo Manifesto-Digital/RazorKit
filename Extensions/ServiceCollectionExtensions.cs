@@ -16,9 +16,23 @@ public static class ServiceCollectionExtensions
     {
         var options = new RazorKitOptions();
         configure(options);
+
+        if (options.MaxPropsJsonBytes is <= 0 or > RazorKitOptions.MaxMaxPropsJsonBytes)
+        {
+            throw new ArgumentOutOfRangeException(nameof(configure),
+                $"RazorKit MaxPropsJsonBytes must be between 1 and {RazorKitOptions.MaxMaxPropsJsonBytes}.");
+        }
+
         services.AddSingleton(options);
 
+        // Parsed here so a malformed AllowedOrigins entry stops the host at startup rather than
+        // surfacing on the first render request.
+        services.AddSingleton(AllowedOriginList.Create(options.AllowedOrigins));
+
         services.AddSingleton<ResponseHeadersFilter>();
+        services.AddSingleton<MethodCheckFilter>();
+        services.AddSingleton<RequestProtectionFilter>();
+        services.AddHostedService<AllowedOriginsStartupCheck>();
 
         services.AddScoped<ComponentDiscoveryService>();
         services.AddScoped<ComponentPropertyService>();
