@@ -14,7 +14,15 @@
     
     <!-- NuGet Package Metadata -->
     <PackageId>Manifesto.RazorKit</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
+    <PackageReleaseNotes>0.2.0: security and reliability improvements. Upgrade by bumping the package version; no code changes are required.
+- If your site runs behind a proxy or CDN, configure ASP.NET Core forwarded headers with your proxy's addresses so client IPs are correct, and set RazorKitOptions.AllowedOrigins to your public URL.
+- MapRazorKit() is optional: if your site already calls MapControllers() and MapRazorPages(), you don't need it.
+- axe-core is now bundled with the package; a CSP no longer needs to allow unpkg.com for RazorKit.
+- The public constructors of RazorKit's controller, page model and services take additional parameters (affects only code that constructs them directly).
+- When two stories share a name, the first one now wins.
+- Rate-limit rejection logs identify clients by a short per-process tag, not by IP address.
+- The preview's invalid-JSON message is now a fixed message; details are shown only in Development.</PackageReleaseNotes>
     <Authors>Manifesto Digital</Authors>
     <Company>Manifesto Digital</Company>
     <Description>A component preview and development tool for ASP.NET Core Razor components. Provides an interactive UI for developing, testing, and documenting reusable Razor components, inspired by Storybook.</Description>
