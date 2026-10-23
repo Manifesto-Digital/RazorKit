@@ -159,8 +159,8 @@ public class RateLimiterUnitTests
     {
         var limits = new RazorKitOptions().RateLimit;
 
-        Assert.Equal((120, 30), (limits.Render.PermitsPerMinute, limits.Render.Burst));
-        Assert.Equal((60, 20), (limits.Page.PermitsPerMinute, limits.Page.Burst));
+        Assert.Equal((300, 60), (limits.Render.PermitsPerMinute, limits.Render.Burst));
+        Assert.Equal((600, 200), (limits.Page.PermitsPerMinute, limits.Page.Burst));
         Assert.Equal(2 * Environment.ProcessorCount, limits.MaxConcurrentRenders);
     }
 

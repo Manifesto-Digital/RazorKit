@@ -45,15 +45,18 @@ public class RazorKitOptions
 public class RazorKitRateLimitOptions
 {
     /// <summary>
-    /// Limit for page loads: the explorer shell and GET previews.
+    /// Limit for page loads: the explorer shell and GET previews. Each story a user opens costs two
+    /// (shell and preview), and behind a proxy without forwarded headers every visitor shares one
+    /// bucket, so the default is generous; <see cref="MaxConcurrentRenders"/> bounds the render work.
     /// </summary>
-    public RazorKitBucketOptions Page { get; } = new(permitsPerMinute: 60, burst: 20);
+    public RazorKitBucketOptions Page { get; } = new(permitsPerMinute: 600, burst: 200);
 
     /// <summary>
-    /// Limit for render requests: the preview POST. Looser than <see cref="Page"/> because the
-    /// explorer re-renders on every debounced keystroke in the Controls panel.
+    /// Limit for render requests: the preview POST, sent on every debounced keystroke in the
+    /// Controls panel. Tighter than <see cref="Page"/> because each request carries client-supplied
+    /// props; it still allows several people editing at once from one shared address.
     /// </summary>
-    public RazorKitBucketOptions Render { get; } = new(permitsPerMinute: 120, burst: 30);
+    public RazorKitBucketOptions Render { get; } = new(permitsPerMinute: 300, burst: 60);
 
     /// <summary>
     /// Renders allowed to run at once across all clients; further renders are answered with 503.
