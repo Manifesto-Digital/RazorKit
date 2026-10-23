@@ -97,7 +97,7 @@ jobs:
       id: login
       uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
       with:
-        user: ${{ vars.NUGET_USER }}
+        user: ${{ secrets.NUGET_USER }}
 
     # No --skip-duplicate: pushing a version that already exists must fail loudly.
     - name: Push to NuGet
