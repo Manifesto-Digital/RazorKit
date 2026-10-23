@@ -1217,62 +1217,108 @@
 
                summary.innerHTML = summaryHTML;
 
-               // Display violations
-               let issuesHTML = '';
+               // Display violations. Every axe-supplied string is inserted as text: axe messages can echo
+               // attribute values from the previewed component, so none of it may be parsed as markup here.
+               function el(tag, className, style, text) {
+                   const node = document.createElement(tag);
+                   if (className) node.className = className;
+                   if (style) node.setAttribute('style', style);
+                   if (text !== undefined) node.textContent = text;
+                   return node;
+               }
+
+               // Only https: documentation links are rendered; anything else (javascript:, data:, relative) is dropped.
+               function safeHttpsUrl(value) {
+                   try {
+                       const url = new URL(String(value));
+                       return url.protocol === 'https:' ? url.href : null;
+                   } catch (e) {
+                       return null;
+                   }
+               }
+
+               issues.textContent = '';
 
                results.violations.forEach(function(violation, index) {
                    const impact = violation.impact || 'moderate';
+                   const impactClass = String(impact).replace(/[^a-z]/gi, '').toLowerCase();
 
-                   // Build elements list with details
-                   let elementsHTML = '';
+                   const elementsList = document.createElement('div');
                    violation.nodes.forEach(function(node, nodeIndex) {
-                       const target = node.target.join(', ') || 'Unknown';
+                       const target = (node.target || []).join(', ') || 'Unknown';
                        const html = node.html || 'HTML not available';
                        const failureSummary = node.failureSummary || 'No summary available';
 
-                       elementsHTML += `
-                           <div class="razorkit-a11y-element" style="margin-bottom: 1rem; padding: 0.75rem; background: #f9f9f9; border-radius: 0.375rem; border-left: 3px solid #ef4444;">
-                               <div style="margin-bottom: 0.5rem;">
-                                   <strong style="color: #374151;">Element ${nodeIndex + 1}:</strong>
-                                   <code style="background: #e5e7eb; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; color: #1f2937;">${target}</code>
-                               </div>
-                               <div style="margin-bottom: 0.5rem;">
-                                   <strong style="color: #374151;">HTML:</strong>
-                                   <pre style="background: #ffffff; padding: 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; white-space: pre-wrap; word-break: break-all; margin: 0.25rem 0; border: 1px solid #d1d5db; max-height: 100px; overflow-y: auto;"><code>${html.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>
-                               </div>
-                               <div>
-                                   <strong style="color: #374151;">Issue:</strong>
-                                   <div style="color: #6b7280; font-size: 0.875rem; margin-top: 0.25rem;">${failureSummary}</div>
-                               </div>
-                           </div>
-                       `;
+                       const element = el('div', 'razorkit-a11y-element', 'margin-bottom: 1rem; padding: 0.75rem; background: #f9f9f9; border-radius: 0.375rem; border-left: 3px solid #ef4444;');
+
+                       const targetRow = el('div', null, 'margin-bottom: 0.5rem;');
+                       targetRow.appendChild(el('strong', null, 'color: #374151;', 'Element ' + (nodeIndex + 1) + ':'));
+                       targetRow.appendChild(document.createTextNode(' '));
+                       targetRow.appendChild(el('code', null, 'background: #e5e7eb; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; color: #1f2937;', target));
+                       element.appendChild(targetRow);
+
+                       const htmlRow = el('div', null, 'margin-bottom: 0.5rem;');
+                       htmlRow.appendChild(el('strong', null, 'color: #374151;', 'HTML:'));
+                       const pre = el('pre', null, 'background: #ffffff; padding: 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; white-space: pre-wrap; word-break: break-all; margin: 0.25rem 0; border: 1px solid #d1d5db; max-height: 100px; overflow-y: auto;');
+                       pre.appendChild(el('code', null, null, html));
+                       htmlRow.appendChild(pre);
+                       element.appendChild(htmlRow);
+
+                       const issueRow = document.createElement('div');
+                       issueRow.appendChild(el('strong', null, 'color: #374151;', 'Issue:'));
+                       issueRow.appendChild(el('div', null, 'color: #6b7280; font-size: 0.875rem; margin-top: 0.25rem;', failureSummary));
+                       element.appendChild(issueRow);
+
+                       elementsList.appendChild(element);
                    });
 
-                   issuesHTML += `
-                       <div class="razorkit-a11y-issue">
-                           <div class="razorkit-a11y-issue-header" onclick="toggleA11yIssue(${index})">
-                               <div class="razorkit-a11y-issue-title">${violation.description}</div>
-                               <div class="razorkit-a11y-issue-impact ${impact}">${impact.toUpperCase()}</div>
-                           </div>
-                           <div class="razorkit-a11y-issue-details" id="a11y-issue-${index}">
-                               <div class="razorkit-a11y-issue-body">
-                                   <div style="margin-bottom: 1rem;">
-                                       <p><strong>Help:</strong> ${violation.help}</p>
-                                       <p><strong>Rule:</strong> ${violation.id}</p>
-                                       <p><strong>Elements affected:</strong> ${violation.nodes.length}</p>
-                                       ${violation.helpUrl ? `<p><a href="${violation.helpUrl}" target="_blank" rel="noopener noreferrer" style="color: #3b82f6;">Learn more →</a></p>` : ''}
-                                   </div>
-                                   <div>
-                                       <h5 style="margin: 0 0 0.5rem 0; font-size: 0.875rem; font-weight: 600; color: #374151;">Affected Elements:</h5>
-                                       ${elementsHTML}
-                                   </div>
-                               </div>
-                           </div>
-                       </div>
-                   `;
-               });
+                   const issue = el('div', 'razorkit-a11y-issue');
 
-               issues.innerHTML = issuesHTML;
+                   const header = el('div', 'razorkit-a11y-issue-header');
+                   header.addEventListener('click', function() { toggleA11yIssue(index); });
+                   header.appendChild(el('div', 'razorkit-a11y-issue-title', null, String(violation.description)));
+                   header.appendChild(el('div', 'razorkit-a11y-issue-impact ' + impactClass, null, String(impact).toUpperCase()));
+                   issue.appendChild(header);
+
+                   const details = el('div', 'razorkit-a11y-issue-details');
+                   details.id = 'a11y-issue-' + index;
+                   const body = el('div', 'razorkit-a11y-issue-body');
+
+                   const meta = el('div', null, 'margin-bottom: 1rem;');
+                   const helpP = document.createElement('p');
+                   helpP.appendChild(el('strong', null, null, 'Help:'));
+                   helpP.appendChild(document.createTextNode(' ' + String(violation.help)));
+                   meta.appendChild(helpP);
+                   const ruleP = document.createElement('p');
+                   ruleP.appendChild(el('strong', null, null, 'Rule:'));
+                   ruleP.appendChild(document.createTextNode(' ' + String(violation.id)));
+                   meta.appendChild(ruleP);
+                   const countP = document.createElement('p');
+                   countP.appendChild(el('strong', null, null, 'Elements affected:'));
+                   countP.appendChild(document.createTextNode(' ' + violation.nodes.length));
+                   meta.appendChild(countP);
+
+                   const helpHref = violation.helpUrl ? safeHttpsUrl(violation.helpUrl) : null;
+                   if (helpHref) {
+                       const linkP = document.createElement('p');
+                       const link = el('a', null, 'color: #3b82f6;', 'Learn more →');
+                       link.href = helpHref;
+                       link.target = '_blank';
+                       link.rel = 'noopener noreferrer';
+                       linkP.appendChild(link);
+                       meta.appendChild(linkP);
+                   }
+                   body.appendChild(meta);
+
+                   const affected = document.createElement('div');
+                   affected.appendChild(el('h5', null, 'margin: 0 0 0.5rem 0; font-size: 0.875rem; font-weight: 600; color: #374151;', 'Affected Elements:'));
+                   affected.appendChild(elementsList);
+                   body.appendChild(affected);
+
+                   details.appendChild(body);
+                   issue.appendChild(details);
+                   issues.appendChild(issue);
+               });
 
                // Auto-expand the accessibility panel if there are violations
                if (violations > 0) {
