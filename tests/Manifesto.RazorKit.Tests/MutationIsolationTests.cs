@@ -28,7 +28,13 @@ public class MutationIsolationTests
     [Fact]
     public async Task Concurrent_requests_do_not_share_story_state()
     {
-        await using var host = await TestHost.StartAsync();
+        // GET previews take a render slot, and the default cap scales with the CPU count, so on a
+        // small CI runner some of these 20 parallel requests would get 503. This test is about
+        // story isolation, not the cap, so give every request a slot.
+        await using var host = await TestHost.StartAsync(new TestHostOptions
+        {
+            ConfigureRazorKit = o => o.RateLimit.MaxConcurrentRenders = 64,
+        });
 
         var outputs = await Task.WhenAll(Enumerable.Range(0, 20).Select(_ => RenderAsync(host)));
 

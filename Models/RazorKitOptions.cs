@@ -59,7 +59,8 @@ public class RazorKitRateLimitOptions
     public RazorKitBucketOptions Render { get; } = new(permitsPerMinute: 300, burst: 60);
 
     /// <summary>
-    /// Renders allowed to run at once across all clients; further renders are answered with 503.
+    /// Renders allowed to run at once across all clients, GET and POST previews alike; further
+    /// renders are answered with 503. The GET preview still draws on the <see cref="Page"/> bucket.
     /// Bounds total render work when many clients, or clients that share an address, are active.
     /// </summary>
     public int MaxConcurrentRenders { get; set; } = Math.Max(1, 2 * Environment.ProcessorCount);
