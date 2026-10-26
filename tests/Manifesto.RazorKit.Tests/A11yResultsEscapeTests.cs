@@ -1,20 +1,19 @@
 using System.Text.RegularExpressions;
-using static Manifesto.RazorKit.Tests.Support.RazorKitRequests;
+using Manifesto.RazorKit.Tests.Support;
 
 namespace Manifesto.RazorKit.Tests;
 
 public class A11yResultsEscapeTests
 {
+    // The function lives in the page's script file, fetched from the URL the page references.
     private static async Task<string> DisplayA11yResultsBodyAsync()
     {
-        await using var host = await TestHost.StartAsync();
+        var script = await PageAssets.LoadScriptAsync();
 
-        var html = await (await host.Client.GetAsync(ShellPath)).Content.ReadAsStringAsync();
-
-        var start = html.IndexOf("function displayA11yResults(", StringComparison.Ordinal);
-        var end = html.IndexOf("function toggleA11yIssue(", StringComparison.Ordinal);
-        Assert.True(start >= 0 && end > start, "displayA11yResults was not found in the page source.");
-        return html[start..end];
+        var start = script.IndexOf("function displayA11yResults(", StringComparison.Ordinal);
+        var end = script.IndexOf("function toggleA11yIssue(", StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start, "displayA11yResults was not found in the page script.");
+        return script[start..end];
     }
 
     [Fact]

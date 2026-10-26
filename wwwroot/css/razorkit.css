@@ -1,0 +1,644 @@
+.razorkit-page {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f8fafc;
+    height: 100vh;
+    overflow: hidden;
+}
+
+    .razorkit-page .razorkit-layout {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        grid-template-rows: 60px 1fr;
+        grid-template-areas:
+            "header header"
+            "sidebar content";
+        height: 100vh;
+    }
+
+    .razorkit-page .razorkit-header {
+        grid-area: header;
+        background: #fff;
+        border-bottom: 1px solid #e2e8f0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 1.5rem;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        z-index: 10;
+    }
+
+    .razorkit-page .razorkit-sidebar {
+        grid-area: sidebar;
+        background: #fff;
+        border-right: 1px solid #e2e8f0;
+        overflow-y: auto;
+        padding: 1rem 0;
+    }
+
+    .razorkit-page .razorkit-content {
+        grid-area: content;
+        display: grid;
+        grid-template-columns: 1fr 320px;
+        grid-template-areas: "preview controls" "bottom bottom";
+        overflow: hidden;
+    }
+
+    /* Layout Modes */
+
+    /* Bottom Layout */
+    .razorkit-page.layout-bottom {
+        grid-template-columns: 280px 1fr;
+        grid-template-rows: 60px 1fr 280px;
+        grid-template-areas:
+            "header header"
+            "sidebar content"
+            "controls controls";
+    }
+
+        .razorkit-page.layout-bottom .razorkit-controls {
+            grid-area: bottom;
+            border-left: none;
+            border-top: 1px solid #e2e8f0;
+            max-height: 280px;
+        }
+
+    /* Hidden Layout - Hide Controls Panel */
+    .razorkit-page.layout-hidden .razorkit-content {
+        grid-template-columns: 1fr;
+        grid-template-areas: "preview";
+    }
+
+    .razorkit-page.layout-bottom .razorkit-content {
+        grid-template-columns: 1fr;
+        grid-template-areas: "preview" "bottom";
+    }
+
+    .razorkit-page.layout-hidden .razorkit-controls {
+        display: none;
+    }
+
+
+
+    .razorkit-page .razorkit-preview {
+        grid-area: preview;
+        background: #fff;
+        overflow-y: auto;
+        position: relative;
+    }
+
+    .razorkit-page .razorkit-controls {
+        grid-area: controls;
+        background: #f8fafc;
+        border-left: 1px solid #e2e8f0;
+        overflow-y: auto;
+        padding: 1.5rem;
+    }
+
+    /* Layout Controls */
+    .razorkit-page .razorkit-layout-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .razorkit-page .razorkit-layout-btn {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+        border: 1px solid #d1d5db;
+        background: #fff;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        color: #6b7280;
+        transition: all 0.2s;
+        font-size: 0.875rem;
+    }
+
+        .razorkit-page .razorkit-layout-btn:hover {
+            background: #f3f4f6;
+            color: #374151;
+            border-color: #9ca3af;
+        }
+
+        .razorkit-page .razorkit-layout-btn.active {
+            background: #3b82f6;
+            color: #fff;
+            border-color: #3b82f6;
+        }
+
+        .razorkit-page .razorkit-layout-btn svg {
+            flex-shrink: 0;
+        }
+
+    /* Show Controls Button */
+    .razorkit-page .razorkit-show-controls-btn {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        background: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 0.375rem;
+        cursor: pointer;
+        font-size: 0.875rem;
+        transition: background 0.2s;
+    }
+
+        .razorkit-page .razorkit-show-controls-btn:hover {
+            background: #2563eb;
+        }
+
+    /* Header Actions */
+    .razorkit-page .razorkit-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .razorkit-page .razorkit-open-window-btn {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        background: #f3f4f6;
+        color: #374151;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        cursor: pointer;
+        font-size: 0.875rem;
+        transition: all 0.2s;
+    }
+
+        .razorkit-page .razorkit-open-window-btn:hover {
+            background: #e5e7eb;
+            border-color: #9ca3af;
+        }
+
+        .razorkit-page .razorkit-open-window-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+    .razorkit-page .razorkit-preview-area {
+        padding: 2rem;
+        min-height: calc(100vh - 120px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle at 1px 1px, rgba(0,0,0,.15) 1px, transparent 0);
+        background-size: 20px 20px;
+    }
+
+    .razorkit-page .razorkit-preview-container {
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        border: 1px solid #e2e8f0;
+    }
+
+    .razorkit-page .razorkit-component-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .razorkit-page .razorkit-component-group {
+        margin-bottom: 1rem;
+    }
+
+    .razorkit-page .razorkit-component-group-title {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: #64748b;
+        padding: 0.5rem 1rem;
+        letter-spacing: 0.05em;
+    }
+
+    .razorkit-page .razorkit-component-section {
+        margin-bottom: 0.5rem;
+    }
+
+    .razorkit-page .razorkit-component-name {
+        display: flex;
+        align-items: center;
+        padding: 0.5rem 1rem;
+        color: #374151;
+        font-weight: 500;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        user-select: none;
+    }
+
+        .razorkit-page .razorkit-component-name:hover {
+            background-color: #f1f5f9;
+            color: #1e40af;
+        }
+
+        .razorkit-page .razorkit-component-name.active {
+            background-color: #e0f2fe;
+            color: #0369a1;
+            font-weight: 600;
+        }
+
+    .razorkit-page .razorkit-toggle-icon {
+        margin-right: 0.5rem;
+        font-size: 0.75rem;
+        width: 12px;
+        display: inline-block;
+        transition: transform 0.15s ease;
+    }
+
+    .razorkit-page .razorkit-story-list {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+    }
+
+        .razorkit-page .razorkit-story-list.expanded {
+            max-height: 500px;
+        }
+
+    .razorkit-page .razorkit-story-item {
+        display: block;
+        padding: 0.375rem 1rem 0.375rem 2.5rem;
+        color: #6b7280;
+        text-decoration: none;
+        font-size: 0.8125rem;
+        transition: all 0.15s ease;
+        border-left: 2px solid transparent;
+    }
+
+        .razorkit-page .razorkit-story-item:hover {
+            background-color: #f8fafc;
+            color: #374151;
+            text-decoration: none;
+            border-left-color: #e5e7eb;
+        }
+
+        .razorkit-page .razorkit-story-item.active {
+            background-color: #dbeafe;
+            color: #1e40af;
+            font-weight: 500;
+            border-left-color: #3b82f6;
+        }
+
+    .razorkit-page .razorkit-control-section {
+        margin-bottom: 1.5rem;
+    }
+
+    .razorkit-page .razorkit-control-section-title {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+    }
+
+    .razorkit-page .razorkit-form-group {
+        margin-bottom: 1rem;
+    }
+
+    .razorkit-page .razorkit-form-label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #374151;
+        margin-bottom: 0.25rem;
+    }
+
+    .razorkit-page .razorkit-form-control {
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+        transition: border-color 0.15s ease-in-out;
+    }
+
+        .razorkit-page .razorkit-form-control:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+        }
+
+    .razorkit-page .razorkit-checkbox-control {
+        width: auto;
+        margin-right: 0.5rem;
+    }
+
+    .razorkit-page .razorkit-checkbox-label {
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+    }
+
+    .razorkit-page .razorkit-reset-button {
+        background: #6b7280;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+    }
+
+        .razorkit-page .razorkit-reset-button:hover {
+            background: #4b5563;
+        }
+
+    .razorkit-page .razorkit-logo {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1f2937;
+    }
+
+    .razorkit-page .razorkit-loading {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+
+    .razorkit-page .razorkit-component-code {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        margin-top: 1rem;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 0.75rem;
+        color: #374151;
+        overflow-x: auto;
+    }
+
+
+
+    /* Accessibility Panel Styles */
+    .razorkit-page .razorkit-a11y-panel {
+        border-top: 1px solid #e2e8f0;
+        background: #f8fafc;
+    }
+
+    .razorkit-page .razorkit-a11y-header {
+        padding: 0.75rem 1rem;
+        background: #fff;
+        border-bottom: 1px solid #e2e8f0;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-weight: 600;
+        font-size: 0.875rem;
+        color: #374151;
+    }
+
+        .razorkit-page .razorkit-a11y-header:hover {
+            background: #f9fafb;
+        }
+
+    .razorkit-page .razorkit-a11y-content {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+    }
+
+        .razorkit-page .razorkit-a11y-content.expanded {
+            max-height: 400px;
+        }
+
+    .razorkit-page .razorkit-a11y-summary {
+        padding: 1rem;
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+    }
+
+    .razorkit-page .razorkit-a11y-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+
+        .razorkit-page .razorkit-a11y-badge.pass {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .razorkit-page .razorkit-a11y-badge.violations {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .razorkit-page .razorkit-a11y-badge.incomplete {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+    .razorkit-page .razorkit-a11y-issues {
+        max-height: 250px;
+        overflow-y: auto;
+        padding: 0 1rem 1rem;
+    }
+
+    .razorkit-page .razorkit-a11y-issue {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.375rem;
+        margin-bottom: 0.5rem;
+        overflow: hidden;
+    }
+
+    .razorkit-page .razorkit-a11y-issue-header {
+        padding: 0.75rem;
+        background: #f9fafb;
+        border-bottom: 1px solid #e5e7eb;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+        .razorkit-page .razorkit-a11y-issue-header:hover {
+            background: #f3f4f6;
+        }
+
+    .razorkit-page .razorkit-a11y-issue-title {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #374151;
+    }
+
+    .razorkit-page .razorkit-a11y-issue-impact {
+        font-size: 0.75rem;
+        padding: 0.125rem 0.375rem;
+        border-radius: 0.25rem;
+        font-weight: 500;
+    }
+
+        .razorkit-page .razorkit-a11y-issue-impact.critical {
+            background: #fecaca;
+            color: #991b1b;
+        }
+
+        .razorkit-page .razorkit-a11y-issue-impact.serious {
+            background: #fed7aa;
+            color: #9a3412;
+        }
+
+        .razorkit-page .razorkit-a11y-issue-impact.moderate {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .razorkit-page .razorkit-a11y-issue-impact.minor {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+    .razorkit-page .razorkit-a11y-issue-details {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+    }
+
+        .razorkit-page .razorkit-a11y-issue-details.expanded {
+            max-height: unset;
+        }
+
+    .razorkit-page .razorkit-a11y-issue-body {
+        padding: 0.75rem;
+        font-size: 0.8125rem;
+        color: #6b7280;
+    }
+
+    .razorkit-page .razorkit-a11y-run-button {
+        background: #3b82f6;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+    }
+
+        .razorkit-page .razorkit-a11y-run-button:hover {
+            background: #2563eb;
+        }
+
+        .razorkit-page .razorkit-a11y-run-button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+    /* Viewport Controls Styles */
+    .razorkit-page .razorkit-viewport-controls {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .razorkit-page .razorkit-viewport-select {
+        padding: 0.375rem 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+        background: white;
+        cursor: pointer;
+        min-width: 160px;
+    }
+
+        .razorkit-page .razorkit-viewport-select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+        }
+
+    .razorkit-page .razorkit-viewport-info {
+        font-size: 0.875rem;
+        color: #6b7280;
+        font-weight: 500;
+        padding: 0.375rem 0.75rem;
+        background: #f9fafb;
+        border-radius: 0.375rem;
+        border: 1px solid #e5e7eb;
+        min-width: 120px;
+        text-align: center;
+    }
+
+    /* Viewport Size Classes - Applied to iframe */
+    .razorkit-page .razorkit-preview.viewport-mobile #preview-iframe {
+        width: 375px;
+        margin: 0 auto;
+        display: block;
+        border: 2px solid #e5e7eb;
+    }
+
+    .razorkit-page .razorkit-preview.viewport-tablet #preview-iframe {
+        width: 768px;
+        margin: 0 auto;
+        display: block;
+        border: 2px solid #e5e7eb;
+    }
+
+    .razorkit-page .razorkit-preview.viewport-laptop #preview-iframe {
+        width: 1024px;
+        margin: 0 auto;
+        display: block;
+        border: 2px solid #e5e7eb;
+    }
+
+    .razorkit-page .razorkit-preview.viewport-desktop #preview-iframe {
+        width: 1440px;
+        margin: 0 auto;
+        display: block;
+        border: 2px solid #e5e7eb;
+    }
+
+    .razorkit-page .razorkit-preview.viewport-large #preview-iframe {
+        width: 1920px;
+        margin: 0 auto;
+        display: block;
+        border: 2px solid #e5e7eb;
+    }
+
+    /* Responsive viewport styling */
+    .razorkit-page .razorkit-preview.viewport-responsive #preview-iframe {
+        width: 100%;
+        border: none;
+    }
+
+    /* In responsive mode, minimize container padding to maximize iframe width */
+    .razorkit-page .razorkit-preview.viewport-responsive .razorkit-preview-container {
+        margin: 0.5rem;
+    }
+
+    /* Make component preview take full width in responsive mode */
+    .razorkit-page .razorkit-preview.viewport-responsive #component-preview {
+        width: 100%;
+        flex-grow: 1;
+    }
+
+    /* Iframe container styling */
+    .razorkit-page .razorkit-preview-container {
+        overflow-x: auto;
+        padding: 1rem;
+    }
+
+    /* Default iframe styling */
+    .razorkit-page #preview-iframe {
+        width: 100%;
+        display: block;
+    }

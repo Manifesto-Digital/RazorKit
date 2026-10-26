@@ -1,3 +1,7 @@
+using System.Reflection;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Manifesto.RazorKit.Filters;
 using Manifesto.RazorKit.Models;
 using Manifesto.RazorKit.Registry;
@@ -56,6 +60,28 @@ public class RazorKitPageModel : PageModel
     public string RequestToken { get; private set; } = string.Empty;
 
     private Type? PropsType { get; set; }
+
+    // The package version changes with every release, so a new package busts browser caches. The
+    // "+<commit sha>" build metadata is stripped so the build commit does not appear in public URLs. IFileVersionProvider cannot be used: it cannot hash the
+    // files of a Razor Class Library's static web assets.
+    private static readonly string AssetVersion = Uri.EscapeDataString(StripBuildMetadata(
+        typeof(RazorKitPageModel).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+        ?? typeof(RazorKitPageModel).Assembly.GetName().Version?.ToString()
+        ?? "0"));
+
+    internal static string StripBuildMetadata(string version)
+    {
+        var plus = version.IndexOf('+');
+        return plus < 0 ? version : version[..plus];
+    }
+
+    // Our own options rather than the host's MVC JSON options, so a host's naming policy or
+    // converters cannot change the shape the script reads. JavaScriptEncoder.Default escapes
+    // <, >, & and quotes, so the serialised text can never close the data block's script element.
+    private static readonly JsonSerializerOptions PageDataJsonOptions = new()
+    {
+        Encoder = JavaScriptEncoder.Default
+    };
 
     public IActionResult OnGet()
     {
@@ -126,4 +152,34 @@ public class RazorKitPageModel : PageModel
     /// A props instance built from the current defaults, for the code snippet in the Controls panel.
     /// </summary>
     public object CreateDefaultsInstance() => _propertyService.CreateComponentInstance(PropsType!, DefaultValues);
+
+    /// <summary>
+    /// The URL of one of the page's own static files, under the host's path base and versioned
+    /// with the package, so the files are found when the site is mounted under a sub-path.
+    /// </summary>
+    public string AssetUrl(string relativePath) =>
+        $"{Request.PathBase}/_content/Manifesto.RazorKit/{relativePath}?v={AssetVersion}";
+
+    /// <summary>The JSON for the page's data block: the server values the page script reads.</summary>
+    public string PageDataJson() => SerializePageData(new RazorKitPageData(
+        Filters.RequestToken.FormField,
+        SelectedComponent?.Name,
+        SelectedComponent?.Path,
+        ComponentProperties.ToDictionary(
+            p => p.Name,
+            p => new RazorKitPropertyData(p.IsCollection, p.IsComplexType, p.Type.Name))));
+
+    internal static string SerializePageData(RazorKitPageData data) => JsonSerializer.Serialize(data, PageDataJsonOptions);
 }
+
+/// <summary>The server data the explorer page script reads from the page's JSON data block.</summary>
+internal sealed record RazorKitPageData(
+    [property: JsonPropertyName("tokenField")] string TokenField,
+    [property: JsonPropertyName("componentName")] string? ComponentName,
+    [property: JsonPropertyName("componentPath")] string? ComponentPath,
+    [property: JsonPropertyName("properties")] Dictionary<string, RazorKitPropertyData> Properties);
+
+internal sealed record RazorKitPropertyData(
+    [property: JsonPropertyName("isCollection")] bool IsCollection,
+    [property: JsonPropertyName("isComplexType")] bool IsComplexType,
+    [property: JsonPropertyName("typeName")] string TypeName);
