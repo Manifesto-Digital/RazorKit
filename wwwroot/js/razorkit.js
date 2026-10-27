@@ -112,7 +112,8 @@ function openComponentInNewWindow() {
         submitPreview('_blank', controls.url, JSON.stringify(controls.props));
     } else {
         // No Controls panel, so nothing was edited: an empty propsJson renders the story's values.
-        submitPreview('_blank', iframe.getAttribute('src'), '');
+        // The captured URL, because the src attribute is 'about:blank' while reloadPreview blanks the frame.
+        submitPreview('_blank', iframe.dataset.previewSrc || iframe.getAttribute('src'), '');
     }
 
     setTimeout(() => {

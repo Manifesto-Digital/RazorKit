@@ -441,6 +441,16 @@ public partial class ThemeTests
     }
 
     [Fact]
+    public async Task Open_in_new_window_uses_the_captured_preview_url_not_the_blanked_src()
+    {
+        var script = await PageAssets.LoadScriptAsync();
+
+        Assert.Contains(
+            "submitPreview('_blank', iframe.dataset.previewSrc || iframe.getAttribute('src'), '');",
+            FunctionBody(script, "openComponentInNewWindow"));
+    }
+
+    [Fact]
     public async Task Switching_theme_reloads_the_preview_without_touching_the_frame()
     {
         var script = await PageAssets.LoadScriptAsync();
