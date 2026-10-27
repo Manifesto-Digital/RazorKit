@@ -3,6 +3,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using Manifesto.RazorKit.Converters;
 using Manifesto.RazorKit.Filters;
+using Manifesto.RazorKit.Helpers;
 using Manifesto.RazorKit.Models;
 using Manifesto.RazorKit.Registry;
 using Manifesto.RazorKit.Services;
@@ -41,6 +42,8 @@ public partial class RazorKitController : Controller
 
     // Resolved per request rather than injected: the set is internal, and the constructor is public.
     private RazorKitThemeSet ThemeSet => HttpContext.RequestServices.GetRequiredService<RazorKitThemeSet>();
+
+    private RazorKitAssetPaths AssetPaths => HttpContext.RequestServices.GetRequiredService<RazorKitAssetPaths>();
 
     public RazorKitController(
         ComponentDiscoveryService componentDiscovery,
@@ -318,21 +321,14 @@ public partial class RazorKitController : Controller
 
     private string CreatePreviewHtml(string content)
     {
-        var cssPath = !string.IsNullOrEmpty(_options.ComponentLibraryName)
-            ? $"/_content/{_options.ComponentLibraryName}/css/main.css"
-            : string.Empty;
-        var jsPath = !string.IsNullOrEmpty(_options.ComponentLibraryName)
-            ? $"/_content/{_options.ComponentLibraryName}/js/main.js"
-            : string.Empty;
-
-        var cssLink = !string.IsNullOrEmpty(cssPath)
-            ? $"<link rel=\"stylesheet\" href=\"{cssPath}\" />"
-            : string.Empty;
-        // PathBase keeps the bundled script reachable when the host is mounted under a sub-path.
-        var axePath = HtmlEncoder.Default.Encode($"{Request.PathBase}/_content/Manifesto.RazorKit/lib/axe-core/axe.min.js");
-        var jsScript = !string.IsNullOrEmpty(jsPath)
-            ? $"<script src=\"{jsPath}\"></script>"
-            : string.Empty;
+        // Every URL is resolved under the host's path base so it is found when the site is mounted
+        // under a sub-path, and encoded for the attribute it is written into. The paths passed
+        // startup validation; the encoding does not depend on that.
+        var cssLinks = string.Join("\n    ", AssetPaths.PreviewStylesheets.Select(path =>
+            $"<link rel=\"stylesheet\" href=\"{HtmlEncoder.Default.Encode(AppPath.Resolve(Request.PathBase, path))}\" />"));
+        var axePath = HtmlEncoder.Default.Encode(AppPath.Resolve(Request.PathBase, "/_content/Manifesto.RazorKit/lib/axe-core/axe.min.js"));
+        var jsScripts = string.Join("\n    ", AssetPaths.PreviewScripts.Select(path =>
+            $"<script src=\"{HtmlEncoder.Default.Encode(AppPath.Resolve(Request.PathBase, path))}\"></script>"));
 
         // The theme is set here, in the served document, so the component's first paint is already
         // themed and nothing has to reach into the frame. The request only selects a configured
@@ -348,7 +344,7 @@ public partial class RazorKitController : Controller
     <meta charset=""UTF-8"">
     <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
     <title>Component Preview</title>
-    {cssLink}
+    {cssLinks}
     <script src=""{axePath}""></script>
     <style>
         body {{
@@ -380,7 +376,7 @@ public partial class RazorKitController : Controller
         <h1 class=""visually-hidden"">Component Preview</h1>
         {content}
     </main>
-    {jsScript}
+    {jsScripts}
 </body>
 </html>";
     }

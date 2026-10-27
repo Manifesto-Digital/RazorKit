@@ -56,7 +56,9 @@ public partial class PreviewSubmitTests
     {
         var script = await PageAssets.LoadScriptAsync();
 
-        Assert.Contains("return { url: `/razorkit-preview/preview/${componentName}/${storyName}`, props: props };", FunctionBody(script, "readControls"));
+        // The URL is the server-given preview route (under the path base) plus the component and
+        // story names, and nothing else; the props travel only in the returned object.
+        Assert.Contains("return { url: `${razorKitData.previewUrl}/${componentName}/${storyName}`, props: props };", FunctionBody(script, "readControls"));
         foreach (var name in new[] { "submitPreview", "readControls", "reloadPreview", "updateIframePreview", "openComponentInNewWindow" })
         {
             var body = FunctionBody(script, name);

@@ -185,6 +185,52 @@ This generates preview HTML with paths like:
 - `/_content/YourProject.Components/css/main.css`
 - `/_content/YourProject.Components/js/main.js`
 
+These are only the defaults; the next section sets the files explicitly.
+
+#### Stylesheets and Scripts
+
+Three options choose the site files RazorKit loads. Each is a list of app-relative paths, loaded in order:
+
+| Option | Loaded into | When left unset (`null`) | Empty list |
+| --- | --- | --- | --- |
+| `ExplorerStylesheets` | the explorer page, before RazorKit's own stylesheet | `/css/main.css` | none |
+| `PreviewStylesheets` | the preview's `<head>` | `/_content/{ComponentLibraryName}/css/main.css`, or none when `ComponentLibraryName` is empty | none |
+| `PreviewScripts` | the end of the preview's `<body>` | `/_content/{ComponentLibraryName}/js/main.js`, or none when `ComponentLibraryName` is empty | none |
+
+Leaving all three unset keeps RazorKit's behaviour from earlier versions. For example, a site that builds its assets into `wwwroot/dist`:
+
+```csharp
+builder.Services.AddRazorKit(options =>
+{
+    options.ExplorerStylesheets = new List<string> { "~/dist/site.css" };
+    options.PreviewStylesheets = new List<string> { "~/dist/site.css", "~/dist/components.css" };
+    options.PreviewScripts = new List<string> { "~/dist/components.js" };
+});
+```
+
+Or from `appsettings.json`, binding the whole section with `builder.Configuration.GetSection("RazorKit").Bind(options)`:
+
+```json
+{
+  "RazorKit": {
+    "ExplorerStylesheets": [ "~/dist/site.css" ],
+    "PreviewStylesheets": [ "~/dist/site.css", "~/dist/components.css" ],
+    "PreviewScripts": [ "~/dist/components.js" ]
+  }
+}
+```
+
+- A path is `/x` or `~/x`; both mean the same file in your application and are written under the request's path base, so `~/dist/site.css` becomes `/site/dist/site.css` when the application is mounted at `/site`. A query string such as `?v=2` is kept.
+- Absolute URLs (`https://...`), scheme-relative URLs (`//host/...`), backslashes, control characters, `..` segments, quotes, `<` and `>` are rejected, and the application stops at startup with a message naming the option and the entry. Load files from another host through your own layout instead.
+- An empty list means "load nothing", and can only be set in code: configuration binding skips an empty JSON array, so `"PreviewScripts": []` leaves the default in place.
+- The lists are read once at startup; changing them afterwards has no effect.
+
+#### Path Base
+
+RazorKit works under a path base, such as `app.UsePathBase("/site")` or a virtual directory. Its pages, redirects, story links, the preview frame and its own files are all served under that base, so `/site/razorkit` opens the explorer.
+
+Take the path base from trusted configuration, not from a raw forwarded header such as `X-Forwarded-Prefix`. RazorKit collapses a leading `//` in the base to a single `/` so it can never write an off-origin URL, but a header the client controls can still point the explorer's links at a path you did not intend.
+
 #### Themes
 
 If your component library styles itself from a `data-theme` attribute, list the themes and RazorKit sets the attribute on the preview's `<html>` element:
@@ -201,8 +247,8 @@ builder.Services.AddRazorKit(options =>
 ```
 
 - The first theme is the default. With one theme it is always applied; with two or more, a theme dropdown appears in the toolbar. With none, the preview sets no `data-theme`.
-- The chosen theme travels as `?theme=<Name>` on RazorKit's links, so a shared link opens in the same theme, and the browser remembers the last choice for links without one.
-- A `?theme=` that does not exactly match a configured `Name` is ignored and the default is used.
+- The chosen theme travels as `?theme=<Name>` on RazorKit's links, so a shared link opens in the same theme. A `?theme=` that exactly matches a configured `Name` always wins.
+- The browser remembers the last theme chosen. When the URL's `?theme=` is missing, or does not exactly match a configured `Name`, the remembered theme is used. With no theme remembered, the first configured theme is the default.
 - `Name` must be unique (ignoring case). `DataTheme` may only contain letters, digits, hyphens and underscores. An invalid entry stops the application at startup.
 
 The list binds from configuration too, for example `builder.Configuration.GetSection("RazorKit:Themes").Bind(options.Themes)` with entries of `Name` and `DataTheme`.
