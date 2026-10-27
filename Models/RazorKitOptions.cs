@@ -21,6 +21,13 @@ public class RazorKitOptions
     public IList<string> AllowedOrigins { get; set; } = new List<string>();
 
     /// <summary>
+    /// The themes the preview can be rendered in; the first is the default. With none, the preview
+    /// sets no theme. With one, it is always applied. With two or more, the explorer shows a theme
+    /// dropdown.
+    /// </summary>
+    public IList<RazorKitTheme> Themes { get; set; } = new List<RazorKitTheme>();
+
+    /// <summary>
     /// The largest props JSON a render request may carry, in UTF-8 bytes. Larger requests get a 413.
     /// </summary>
     public int MaxPropsJsonBytes { get; set; } = DefaultMaxPropsJsonBytes;

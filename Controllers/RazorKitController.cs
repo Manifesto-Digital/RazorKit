@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewEngines;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -38,6 +39,9 @@ public partial class RazorKitController : Controller
     private readonly IHostEnvironment _environment;
     private readonly ILogger<RazorKitController> _logger;
 
+    // Resolved per request rather than injected: the set is internal, and the constructor is public.
+    private RazorKitThemeSet ThemeSet => HttpContext.RequestServices.GetRequiredService<RazorKitThemeSet>();
+
     public RazorKitController(
         ComponentDiscoveryService componentDiscovery,
         ComponentPropertyService propertyService,
@@ -59,7 +63,8 @@ public partial class RazorKitController : Controller
     }
 
     // GET takes no props from any source, so only a POST that passed request protection can
-    // change what the preview renders. "Open in new window" uses this GET.
+    // change what the preview renders. The iframe of a component without controls loads this GET; "Open in
+    // new window" is a form POST.
     [HttpGet("preview/{componentName}/{storyName?}")]
     public Task<IActionResult> Preview([FromRoute] string componentName, [FromRoute] string storyName = "default") =>
         RenderPreviewAsync(componentName, storyName, propsJson: null);
@@ -329,19 +334,21 @@ public partial class RazorKitController : Controller
             ? $"<script src=\"{jsPath}\"></script>"
             : string.Empty;
 
+        // The theme is set here, in the served document, so the component's first paint is already
+        // themed and nothing has to reach into the frame. The request only selects a configured
+        // entry; the attribute value is always that entry's validated DataTheme.
+        var theme = ThemeSet.Resolve(Request.Query[RazorKitThemeSet.QueryKey]);
+        var themeAttribute = theme != null
+            ? $" data-theme=\"{HtmlEncoder.Default.Encode(theme.DataTheme)}\""
+            : string.Empty;
+
         return $@"<!DOCTYPE html>
-<html lang=""en"">
+<html lang=""en""{themeAttribute}>
 <head>
     <meta charset=""UTF-8"">
     <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
     <title>Component Preview</title>
     {cssLink}
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {{
-            const theme = localStorage.getItem('storybook-theme') || 'charity';
-            document.documentElement.setAttribute('data-theme', theme);
-        }});
-    </script>
     <script src=""{axePath}""></script>
     <style>
         body {{

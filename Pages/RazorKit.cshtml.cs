@@ -8,6 +8,7 @@ using Manifesto.RazorKit.Registry;
 using Manifesto.RazorKit.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Manifesto.RazorKit.Pages;
 
@@ -32,6 +33,9 @@ public class RazorKitPageModel : PageModel
     private readonly ComponentStoryService _storyService;
     private readonly RazorKitRegistry _registry;
 
+    // Resolved per request rather than injected: the set is internal, and the constructor is public.
+    private RazorKitThemeSet ThemeSet => HttpContext.RequestServices.GetRequiredService<RazorKitThemeSet>();
+
     public RazorKitPageModel(
         ComponentDiscoveryService componentDiscovery,
         ComponentPropertyService propertyService,
@@ -55,6 +59,28 @@ public class RazorKitPageModel : PageModel
     public Dictionary<string, object> DefaultValues { get; private set; } = new();
 
     public string InitialIframeUrl { get; private set; } = string.Empty;
+
+    /// <summary>The configured theme names, in order, for the theme dropdown.</summary>
+    public IEnumerable<string> ThemeNames => ThemeSet.Themes.Select(t => t.Name);
+
+    /// <summary>True when there are two or more themes to choose between, so the dropdown is shown.</summary>
+    public bool ShowThemeSelector => ThemeSet.HasChoice;
+
+    /// <summary>The theme this page shows: the requested one when it is configured, else the default.</summary>
+    public string? SelectedThemeName { get; private set; }
+
+    // Whether the URL named a configured theme. When it did not, the page script may still apply
+    // the theme the browser remembers.
+    private bool ThemeWasRequested { get; set; }
+
+    /// <summary>
+    /// The query string RazorKit's own links carry so the theme survives navigation and shared
+    /// links: "?theme=name" when there is a choice of themes, otherwise empty. Built from the
+    /// configured name, never from the request.
+    /// </summary>
+    public string ThemeQuery => ShowThemeSelector && SelectedThemeName != null
+        ? $"?{RazorKitThemeSet.QueryKey}={Uri.EscapeDataString(SelectedThemeName)}"
+        : string.Empty;
 
     /// <summary>The value the page script posts back with every preview render.</summary>
     public string RequestToken { get; private set; } = string.Empty;
@@ -85,6 +111,10 @@ public class RazorKitPageModel : PageModel
 
     public IActionResult OnGet()
     {
+        var requestedTheme = ThemeSet.FindRequested(Request.Query[RazorKitThemeSet.QueryKey]);
+        ThemeWasRequested = requestedTheme != null;
+        SelectedThemeName = (requestedTheme ?? ThemeSet.Default)?.Name;
+
         Components = _componentDiscovery.DiscoverComponents();
         var componentName = RouteData.Values["componentName"]?.ToString();
         var storyName = RouteData.Values["storyName"]?.ToString();
@@ -95,8 +125,8 @@ public class RazorKitPageModel : PageModel
             var firstStory = _storyService.GetStoriesForComponent(firstComponent.Name).FirstOrDefault();
 
             return Redirect(firstStory != null
-                ? $"/razorkit/{firstComponent.Name.ToLower()}/{firstStory.Name.ToLower()}"
-                : $"/razorkit/{firstComponent.Name.ToLower()}");
+                ? $"/razorkit/{firstComponent.Name.ToLower()}/{firstStory.Name.ToLower()}{RedirectThemeQuery}"
+                : $"/razorkit/{firstComponent.Name.ToLower()}{RedirectThemeQuery}");
         }
 
         SelectedComponent = Components.FirstOrDefault(c => c.Name.Equals(componentName, StringComparison.OrdinalIgnoreCase));
@@ -107,7 +137,7 @@ public class RazorKitPageModel : PageModel
 
             if (string.IsNullOrEmpty(storyName) && stories.Any())
             {
-                return Redirect($"/razorkit/{SelectedComponent.Name.ToLower()}/{stories.First().Name.ToLower()}");
+                return Redirect($"/razorkit/{SelectedComponent.Name.ToLower()}/{stories.First().Name.ToLower()}{RedirectThemeQuery}");
             }
 
             SelectedStory = stories.FirstOrDefault(s => s.Name.Equals(storyName, StringComparison.OrdinalIgnoreCase));
@@ -136,12 +166,16 @@ public class RazorKitPageModel : PageModel
                 }
             }
 
-            InitialIframeUrl = $"/razorkit-preview/preview/{SelectedComponent.Name.ToLower()}/{SelectedStory?.Name.ToLower() ?? "default"}";
+            InitialIframeUrl = $"/razorkit-preview/preview/{SelectedComponent.Name.ToLower()}/{SelectedStory?.Name.ToLower() ?? "default"}{ThemeQuery}";
         }
 
         RequestToken = Filters.RequestToken.Issue(HttpContext);
         return Page();
     }
+
+    // A redirect keeps only a theme the URL actually named, so a link without one still lands on a
+    // page that can apply the remembered theme.
+    private string RedirectThemeQuery => ThemeWasRequested ? ThemeQuery : string.Empty;
 
     /// <summary>
     /// The reset button's label: what resetting the controls returns them to. A story that sets
@@ -175,7 +209,13 @@ public class RazorKitPageModel : PageModel
         SelectedComponent?.Path,
         ComponentProperties.ToDictionary(
             p => p.Name,
-            p => new RazorKitPropertyData(p.IsCollection, p.IsComplexType, p.Type.Name))));
+            p => new RazorKitPropertyData(p.IsCollection, p.IsComplexType, p.Type.Name)))
+    {
+        // Empty unless there is a choice of themes: with one theme or none the script has nothing to do.
+        Themes = ShowThemeSelector ? ThemeNames.ToArray() : Array.Empty<string>(),
+        Theme = ShowThemeSelector ? SelectedThemeName : null,
+        ThemeRequested = ShowThemeSelector && ThemeWasRequested
+    });
 
     internal static string SerializePageData(RazorKitPageData data) => JsonSerializer.Serialize(data, PageDataJsonOptions);
 }
@@ -185,7 +225,20 @@ internal sealed record RazorKitPageData(
     [property: JsonPropertyName("tokenField")] string TokenField,
     [property: JsonPropertyName("componentName")] string? ComponentName,
     [property: JsonPropertyName("componentPath")] string? ComponentPath,
-    [property: JsonPropertyName("properties")] Dictionary<string, RazorKitPropertyData> Properties);
+    [property: JsonPropertyName("properties")] Dictionary<string, RazorKitPropertyData> Properties)
+{
+    /// <summary>The theme names the script accepts from the dropdown or localStorage.</summary>
+    [JsonPropertyName("themes")]
+    public string[] Themes { get; init; } = Array.Empty<string>();
+
+    /// <summary>The theme the server rendered this page and its preview with.</summary>
+    [JsonPropertyName("theme")]
+    public string? Theme { get; init; }
+
+    /// <summary>Whether that theme came from the URL; when not, a remembered theme may replace it.</summary>
+    [JsonPropertyName("themeRequested")]
+    public bool ThemeRequested { get; init; }
+}
 
 internal sealed record RazorKitPropertyData(
     [property: JsonPropertyName("isCollection")] bool IsCollection,

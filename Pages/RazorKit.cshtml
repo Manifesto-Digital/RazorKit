@@ -77,6 +77,16 @@
                     <option value="large">🖥️ Large (1920px)</option>
                 </select>
 
+                @if (Model.ShowThemeSelector)
+                {
+                    <select id="theme-selector" class="razorkit-viewport-select" aria-label="Preview theme" title="Preview theme" autocomplete="off">
+                        @foreach (var themeName in Model.ThemeNames)
+                        {
+                            <option value="@themeName" selected="@(themeName == Model.SelectedThemeName)">@themeName</option>
+                        }
+                    </select>
+                }
+
                 <div class="razorkit-viewport-info" id="viewport-info">
                     <span id="viewport-size">Responsive</span>
                 </div>
@@ -108,7 +118,8 @@
                                     <div class="razorkit-story-list @(isComponentSelected ? "expanded" : "")" id="stories-@component.Name.ToLower()">
                                         @foreach (var story in componentStories)
                                         {
-                                            <a href="/razorkit/@component.Name.ToLower()/@story.Name.ToLower()"
+                                            <a href="/razorkit/@component.Name.ToLower()/@story.Name.ToLower()@Model.ThemeQuery"
+                                               data-razorkit-themed-link
                                                class="razorkit-story-item @(selectedStory?.Name == story.Name ? "active" : "")"
                                                title="@story.Description">
                                                 @story.DisplayName

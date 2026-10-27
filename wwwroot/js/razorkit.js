@@ -7,6 +7,82 @@ const razorKitData = JSON.parse(document.getElementById('razorkit-data').textCon
 // page script was given.
 const propertyMetadata = razorKitData.properties;
 
+// Themes. The server renders data-theme in the preview from the ?theme= it is sent, so switching
+// theme is a reload of the preview with the new name, through reloadPreview so edits are kept.
+// The parent never touches the frame's document. Only a configured name is ever stored or sent,
+// and localStorage holds that name and nothing else.
+const themeStorageKey = 'razorkit-theme';
+let currentTheme = razorKitData.theme;
+
+function isConfiguredTheme(name) {
+    return typeof name === 'string' && razorKitData.themes.indexOf(name) !== -1;
+}
+
+// Storage can be unavailable (blocked cookies, private modes); the theme then lasts for the page only.
+function readStoredTheme() {
+    try {
+        const stored = localStorage.getItem(themeStorageKey);
+        return isConfiguredTheme(stored) ? stored : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function storeTheme(name) {
+    try {
+        localStorage.setItem(themeStorageKey, name);
+    } catch (e) {
+        // Not remembered; the URL still carries the theme.
+    }
+}
+
+// A RazorKit URL with the current theme as its ?theme=, replacing any theme it already had.
+// Unchanged when there is no choice of themes: the server applies the only one, or none.
+function withTheme(url) {
+    if (!currentTheme) return url;
+    const parsed = new URL(url, document.baseURI);
+    parsed.searchParams.set('theme', currentTheme);
+    return parsed.pathname + parsed.search + parsed.hash;
+}
+
+function applyTheme(name) {
+    if (!isConfiguredTheme(name)) return;
+
+    currentTheme = name;
+    storeTheme(name);
+
+    const selector = document.getElementById('theme-selector');
+    if (selector) selector.value = name;
+
+    document.querySelectorAll('[data-razorkit-themed-link]').forEach(function(link) {
+        link.setAttribute('href', withTheme(link.getAttribute('href')));
+    });
+
+    // The address bar carries the theme too, so a reload or a copied link shows the same theme.
+    history.replaceState(history.state, '', withTheme(window.location.pathname + window.location.search));
+
+    reloadPreview();
+}
+
+function initializeTheme() {
+    if (!currentTheme) return;
+
+    if (razorKitData.themeRequested) {
+        // A link that named the theme is a choice too, so it is the one remembered.
+        storeTheme(currentTheme);
+        return;
+    }
+
+    // The URL named no configured theme, so the server used the default. The remembered theme,
+    // if there is one, wins; otherwise the default is written into the address bar.
+    const stored = readStoredTheme();
+    if (stored && stored !== currentTheme) {
+        applyTheme(stored);
+    } else {
+        history.replaceState(history.state, '', withTheme(window.location.pathname + window.location.search));
+    }
+}
+
 function resetForm() {
     const form = document.getElementById('component-form');
     if (form) {
@@ -437,7 +513,12 @@ function reloadPreview() {
         return;
     }
 
-    const src = iframe.getAttribute('src');
+    // The real preview URL is captured once. A second reload inside the 10 ms blanking window would
+    // otherwise read 'about:blank' from the attribute and lose the preview.
+    if (!iframe.dataset.previewSrc) {
+        iframe.dataset.previewSrc = iframe.getAttribute('src');
+    }
+    const src = withTheme(iframe.dataset.previewSrc);
     iframe.src = 'about:blank';
     setTimeout(function() {
         iframe.src = src;
@@ -502,7 +583,7 @@ function submitPreview(target, url, propsJson) {
     try {
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = url;
+        form.action = withTheme(url);
         form.target = target;
         form.style.display = 'none';
         if (target === '_blank') {
@@ -621,10 +702,13 @@ document.addEventListener('click', function(evt) {
 document.addEventListener('change', function(evt) {
     if (evt.target.id === 'viewport-selector') {
         changeViewport();
+    } else if (evt.target.id === 'theme-selector') {
+        applyTheme(evt.target.value);
     }
 });
 
 document.addEventListener('DOMContentLoaded', function() {
+    initializeTheme();
     initializeViewport();
 
     const savedLayout = localStorage.getItem('razorkit-sidebar-layout') || 'side';

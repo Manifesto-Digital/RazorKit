@@ -33,6 +33,10 @@ public static class ServiceCollectionExtensions
         // surfacing on the first render request.
         services.AddSingleton(AllowedOriginList.Create(options.AllowedOrigins));
 
+        // Validated and copied here: a bad theme stops the host at startup, and the preview only
+        // ever writes a data-theme value that passed this check.
+        services.AddSingleton(RazorKitThemeSet.Create(options.Themes));
+
         services.AddSingleton<ResponseHeadersFilter>();
         services.AddSingleton<MethodCheckFilter>();
         services.AddSingleton<RequestProtectionFilter>();
