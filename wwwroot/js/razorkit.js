@@ -144,6 +144,9 @@ function toggleSidebarLayout(layout) {
         showControlsBtn.style.display = 'none';
     }
 
+    // The active layout is shown by colour, so it is also exposed as the pressed button.
+    layoutButtons.forEach(btn => btn.setAttribute('aria-pressed', btn.classList.contains('active') ? 'true' : 'false'));
+
     localStorage.setItem('razorkit-sidebar-layout', layout);
     setTimeout(updateViewportInfo, 100);
 }
@@ -165,12 +168,88 @@ document.addEventListener('keyup', function(evt) {
     }
 });
 
-function toggleStories(componentName) {
+function toggleStories(control, componentName) {
     const storiesList = document.getElementById('stories-' + componentName);
     if (storiesList) {
-        storiesList.classList.toggle('expanded');
+        const expanded = storiesList.classList.toggle('expanded');
+        control.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        const icon = control.querySelector('.razorkit-toggle-icon');
+        if (icon) icon.textContent = expanded ? '▼' : '▶';
     }
 }
+
+// Narrow screens: the sidebar and the controls are slide-over panels and at most one is open.
+// The query matches the breakpoint in razorkit.css. Above it the panel state has no effect and
+// both columns show as before.
+const NARROW_QUERY = window.matchMedia('(max-width: 1023px)');
+const panelToggles = {
+    components: 'razorkit-components-toggle',
+    controls: 'razorkit-controls-toggle'
+};
+let openPanel = null;
+
+function setPanel(name) {
+    openPanel = name;
+    const body = document.body;
+    Object.keys(panelToggles).forEach(function(panel) {
+        const open = panel === name;
+        body.classList.toggle('razorkit-' + panel + '-open', open);
+        const toggle = document.getElementById(panelToggles[panel]);
+        if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    applyPanelInertness();
+}
+
+// An open panel covers the preview, so the preview leaves the tab order and the accessibility tree
+// until the panel closes; otherwise focus would move into a frame the user cannot see.
+function applyPanelInertness() {
+    const preview = document.querySelector('.razorkit-preview');
+    if (!preview) return;
+    preview.inert = Boolean(openPanel) && NARROW_QUERY.matches;
+}
+
+function togglePanel(name) {
+    setPanel(openPanel === name ? null : name);
+}
+
+function closePanel(returnFocus) {
+    if (!openPanel) return;
+    const toggle = document.getElementById(panelToggles[openPanel]);
+    setPanel(null);
+    if (returnFocus && toggle) toggle.focus();
+}
+
+NARROW_QUERY.addEventListener('change', applyPanelInertness);
+
+document.addEventListener('keydown', function(evt) {
+    if (evt.key === 'Escape' && openPanel && NARROW_QUERY.matches) {
+        closePanel(true);
+    }
+});
+
+// Focus ring for the preview frame. When Tab moves focus into the frame, this window blurs with the
+// iframe as its active element; CSS cannot see that, so a class marks it until focus comes back.
+// Only keyboard arrivals are marked, so clicking into the component shows no ring.
+let lastKeyWasTab = false;
+document.addEventListener('keydown', function(evt) { lastKeyWasTab = evt.key === 'Tab'; }, true);
+document.addEventListener('pointerdown', function() { lastKeyWasTab = false; }, true);
+window.addEventListener('blur', function() {
+    const iframe = document.getElementById('preview-iframe');
+    if (iframe && lastKeyWasTab && document.activeElement === iframe) {
+        iframe.classList.add('razorkit-frame-focused');
+    }
+});
+window.addEventListener('focus', function() {
+    const iframe = document.getElementById('preview-iframe');
+    if (iframe) iframe.classList.remove('razorkit-frame-focused');
+});
+
+// A tap outside the open panel closes it, as the preview it covers cannot take the tap while inert.
+document.addEventListener('click', function(evt) {
+    if (!openPanel || !NARROW_QUERY.matches) return;
+    if (evt.target.closest('.razorkit-header, .razorkit-sidebar, .razorkit-controls')) return;
+    closePanel(false);
+});
 
 function updateComponentCode() {
     const form = document.getElementById('component-form');
@@ -209,7 +288,7 @@ function updateComponentCode() {
         };
 
         const lines = [
-            addLine([['@await Html.PartialAsync("' + razorKitData.componentPath + '", new ' + razorKitData.componentName + 'Props', '#059669']], false),
+            addLine([['@await Html.PartialAsync("' + razorKitData.componentPath + '", new ' + razorKitData.componentName + 'Props', '#047857']], false),
             addLine([['{', '#dc2626']], false)
         ];
 
@@ -225,14 +304,20 @@ function updateComponentCode() {
     clearA11yResults();
 }
 
-function toggleA11yPanel() {
+function setA11yPanelExpanded(expanded) {
     const content = document.getElementById('a11y-content');
     const icon = document.getElementById('a11y-toggle-icon');
+    const header = document.querySelector('.razorkit-a11y-header');
 
-    if (content && icon) {
-        content.classList.toggle('expanded');
-        icon.textContent = content.classList.contains('expanded') ? '▼' : '▶';
-    }
+    if (!content) return;
+    content.classList.toggle('expanded', expanded);
+    if (icon) icon.textContent = expanded ? '▼' : '▶';
+    if (header) header.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+}
+
+function toggleA11yPanel() {
+    const content = document.getElementById('a11y-content');
+    if (content) setA11yPanelExpanded(!content.classList.contains('expanded'));
 }
 
 function runA11yTest() {
@@ -375,10 +460,15 @@ function displayA11yResults(results) {
 
         const issue = el('div', 'razorkit-a11y-issue');
 
-        const header = el('div', 'razorkit-a11y-issue-header');
-        header.addEventListener('click', function() { toggleA11yIssue(index); });
-        header.appendChild(el('div', 'razorkit-a11y-issue-title', null, String(violation.description)));
-        header.appendChild(el('div', 'razorkit-a11y-issue-impact ' + impactClass, null, String(impact).toUpperCase()));
+        // A real button, so the issue opens from the keyboard; its parts are spans because a button
+        // may only hold phrasing content.
+        const header = el('button', 'razorkit-a11y-issue-header');
+        header.type = 'button';
+        header.setAttribute('aria-expanded', 'false');
+        header.setAttribute('aria-controls', 'a11y-issue-' + index);
+        header.addEventListener('click', function() { toggleA11yIssue(index, header); });
+        header.appendChild(el('span', 'razorkit-a11y-issue-title', null, String(violation.description)));
+        header.appendChild(el('span', 'razorkit-a11y-issue-impact ' + impactClass, null, String(impact).toUpperCase()));
         issue.appendChild(header);
 
         const details = el('div', 'razorkit-a11y-issue-details');
@@ -402,7 +492,7 @@ function displayA11yResults(results) {
         const helpHref = violation.helpUrl ? safeHttpsUrl(violation.helpUrl) : null;
         if (helpHref) {
             const linkP = document.createElement('p');
-            const link = el('a', null, 'color: #3b82f6;', 'Learn more →');
+            const link = el('a', null, 'color: #2563eb;', 'Learn more →');
             link.href = helpHref;
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
@@ -412,7 +502,8 @@ function displayA11yResults(results) {
         body.appendChild(meta);
 
         const affected = document.createElement('div');
-        affected.appendChild(el('h5', null, 'margin: 0 0 0.5rem 0; font-size: 0.875rem; font-weight: 600; color: #374151;', 'Affected Elements:'));
+        // h3 under the story's h2; a deeper level skipped heading levels.
+        affected.appendChild(el('h3', null, 'margin: 0 0 0.5rem 0; font-size: 0.875rem; font-weight: 600; color: #374151;', 'Affected Elements:'));
         affected.appendChild(elementsList);
         body.appendChild(affected);
 
@@ -423,19 +514,15 @@ function displayA11yResults(results) {
 
     // Auto-expand the accessibility panel if there are violations
     if (violations > 0) {
-        const content = document.getElementById('a11y-content');
-        const icon = document.getElementById('a11y-toggle-icon');
-        if (content && !content.classList.contains('expanded')) {
-            content.classList.add('expanded');
-            if (icon) icon.textContent = '▼';
-        }
+        setA11yPanelExpanded(true);
     }
 }
 
-function toggleA11yIssue(index) {
+function toggleA11yIssue(index, header) {
     const details = document.getElementById('a11y-issue-' + index);
     if (details) {
-        details.classList.toggle('expanded');
+        const expanded = details.classList.toggle('expanded');
+        if (header) header.setAttribute('aria-expanded', expanded ? 'true' : 'false');
     }
 }
 
@@ -685,7 +772,10 @@ document.addEventListener('click', function(evt) {
             openComponentInNewWindow();
             break;
         case 'toggle-stories':
-            toggleStories(control.dataset.razorkitComponent);
+            toggleStories(control, control.dataset.razorkitComponent);
+            break;
+        case 'toggle-panel':
+            togglePanel(control.dataset.razorkitPanel);
             break;
         case 'reset-form':
             resetForm();
