@@ -201,8 +201,8 @@ builder.Services.AddRazorKit(options =>
 ```
 
 - The first theme is the default. With one theme it is always applied; with two or more, a theme dropdown appears in the toolbar. With none, the preview sets no `data-theme`.
-- The chosen theme travels as `?theme=<Name>` on RazorKit's links, so a shared link opens in the same theme, and the browser remembers the last choice for links without one.
-- A `?theme=` that does not exactly match a configured `Name` is ignored and the default is used.
+- The chosen theme travels as `?theme=<Name>` on RazorKit's links, so a shared link opens in the same theme. A `?theme=` that exactly matches a configured `Name` always wins.
+- The browser remembers the last theme chosen. When the URL's `?theme=` is missing, or does not exactly match a configured `Name`, the remembered theme is used. With no theme remembered, the first configured theme is the default.
 - `Name` must be unique (ignoring case). `DataTheme` may only contain letters, digits, hyphens and underscores. An invalid entry stops the application at startup.
 
 The list binds from configuration too, for example `builder.Configuration.GetSection("RazorKit:Themes").Bind(options.Themes)` with entries of `Name` and `DataTheme`.
