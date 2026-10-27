@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace Manifesto.RazorKit.Filters;
@@ -10,8 +9,6 @@ namespace Manifesto.RazorKit.Filters;
 /// </summary>
 internal sealed class RateLimitFilter : IResourceFilter
 {
-    internal const string RejectionBody = "Too many requests.";
-
     private readonly RazorKitRateLimiter _limiter;
 
     public RateLimitFilter(RazorKitRateLimiter limiter)
@@ -31,12 +28,7 @@ internal sealed class RateLimitFilter : IResourceFilter
         }
 
         http.Response.Headers.RetryAfter = decision.RetryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        context.Result = new ContentResult
-        {
-            StatusCode = StatusCodes.Status429TooManyRequests,
-            ContentType = "text/plain",
-            Content = RejectionBody
-        };
+        context.Result = RejectionPage.Result(StatusCodes.Status429TooManyRequests, RejectionPage.TooManyRequests);
     }
 
     public void OnResourceExecuted(ResourceExecutedContext context)

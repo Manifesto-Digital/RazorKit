@@ -269,16 +269,13 @@
                             }
                         </form>
 
+                        @* The controls are rendered with the story's values over the component defaults, and
+                           resetting restores exactly those. A page reload is not a reset: browsers may restore
+                           edited values on reload, so there is no separate reload button. *@
                         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                             <button type="button" class="razorkit-reset-button" data-razorkit-action="reset-form">
-                                Reset to Defaults
+                                @Model.ResetLabel
                             </button>
-                            @if (selectedStory != null && selectedStory.Properties.Any())
-                            {
-                                <button type="button" class="razorkit-reset-button" style="background: #059669;" data-razorkit-action="reset-story">
-                                    Reset to Story
-                                </button>
-                            }
                         </div>
                     </div>
 

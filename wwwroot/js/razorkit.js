@@ -16,21 +16,27 @@ function resetForm() {
     }
 }
 
+// Opens what the preview shows now, edits included, by submitting the same protected render POST
+// to a new tab. A GET of the preview URL would show the story's values and drop the edits, and
+// props never travel in a URL, so a POST is the only way to carry them.
 function openComponentInNewWindow() {
     const iframe = document.getElementById('preview-iframe');
     const openBtn = document.querySelector('.razorkit-open-window-btn');
 
-    if (!iframe || !iframe.src) {
+    if (!iframe) {
         alert('No component preview available to open');
         return;
     }
 
     openBtn.disabled = true;
 
-    const newWindow = window.open(iframe.src, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
-
-    if (!newWindow) {
-        alert('Popup blocked. Please allow popups for this site to open components in new windows.');
+    const form = document.getElementById('component-form');
+    if (form) {
+        const controls = readControls(form);
+        submitPreview('_blank', controls.url, JSON.stringify(controls.props));
+    } else {
+        // No Controls panel, so nothing was edited: an empty propsJson renders the story's values.
+        submitPreview('_blank', iframe.getAttribute('src'), '');
     }
 
     setTimeout(() => {
@@ -64,10 +70,6 @@ function toggleSidebarLayout(layout) {
 
     localStorage.setItem('razorkit-sidebar-layout', layout);
     setTimeout(updateViewportInfo, 100);
-}
-
-function resetToStory() {
-    window.location.reload();
 }
 
 document.addEventListener('change', function(evt) {
@@ -384,17 +386,9 @@ function changeViewport() {
     // Add the selected viewport class
     preview.classList.add('viewport-' + selectedViewport);
 
-    // Force iframe to refresh with new viewport dimensions
+    // Re-render at the new width, so components that measure themselves on load lay out again.
     setTimeout(function() {
-        const iframe = document.getElementById('preview-iframe');
-        if (iframe) {
-            // Force a reload by temporarily changing and restoring the src
-            const currentSrc = iframe.src;
-            iframe.src = 'about:blank';
-            setTimeout(function() {
-                iframe.src = currentSrc;
-            }, 10);
-        }
+        reloadPreview();
 
         // Update viewport info display after iframe loads
         setTimeout(updateViewportInfo, 100);
@@ -431,12 +425,37 @@ function updateViewportInfo() {
     }
 }
 
+// Every preview reload goes through here, so a reload never drops edits. With a Controls panel it
+// re-posts the current values through the protected render POST. A component without controls has
+// no edits to keep, and its GET URL is reloaded as before.
+function reloadPreview() {
+    const iframe = document.getElementById('preview-iframe');
+    if (!iframe) return;
+
+    if (document.getElementById('component-form')) {
+        updateIframePreview();
+        return;
+    }
+
+    const src = iframe.getAttribute('src');
+    iframe.src = 'about:blank';
+    setTimeout(function() {
+        iframe.src = src;
+    }, 10);
+}
+
 function updateIframePreview() {
     const form = document.getElementById('component-form');
     const iframe = document.getElementById('preview-iframe');
 
     if (!form || !iframe) return;
 
+    const controls = readControls(form);
+    postToIframe(iframe, controls.url, controls.props);
+}
+
+// The current Controls values as the props object the render POST sends, and the URL to post it to.
+function readControls(form) {
     const formData = new FormData(form);
     const componentName = formData.get('componentName');
     const storyName = formData.get('storyName') || 'default';
@@ -470,24 +489,31 @@ function updateIframePreview() {
         }
     }
 
-    // POST the data to update the iframe
-    postToIframe(iframe, `/razorkit-preview/preview/${componentName}/${storyName}`, props);
+    return { url: `/razorkit-preview/preview/${componentName}/${storyName}`, props: props };
 }
 
 function postToIframe(iframe, url, data) {
+    submitPreview(iframe.name || 'preview-iframe', url, JSON.stringify(data));
+}
+
+// The one way props reach the server: a form POST carrying the page's token, which request
+// protection checks like any other render. Props never go in a URL, storage or window name.
+function submitPreview(target, url, propsJson) {
     try {
-        // Create a temporary form to POST to the iframe
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = url;
-        form.target = iframe.name || 'preview-iframe';
+        form.target = target;
         form.style.display = 'none';
+        if (target === '_blank') {
+            // The new tab gets no handle back to this page.
+            form.setAttribute('rel', 'noopener');
+        }
 
-        // Add props as JSON
         const input = document.createElement('input');
         input.type = 'hidden';
         input.name = 'propsJson';
-        input.value = JSON.stringify(data);
+        input.value = propsJson;
         form.appendChild(input);
 
         // The server rejects a render POST without the token the page was issued.
@@ -502,7 +528,7 @@ function postToIframe(iframe, url, data) {
         form.submit();
         document.body.removeChild(form);
     } catch (e) {
-        console.error('Error posting to iframe:', e);
+        console.error('Error posting the preview:', e);
     }
 }
 
@@ -582,9 +608,6 @@ document.addEventListener('click', function(evt) {
             break;
         case 'reset-form':
             resetForm();
-            break;
-        case 'reset-story':
-            resetToStory();
             break;
         case 'toggle-a11y':
             toggleA11yPanel();

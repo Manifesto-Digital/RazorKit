@@ -1,4 +1,5 @@
 using System.Net;
+using Manifesto.RazorKit.Filters;
 using static Manifesto.RazorKit.Tests.Support.RazorKitRequests;
 
 namespace Manifesto.RazorKit.Tests;
@@ -22,7 +23,7 @@ public class MethodCheckTests
         Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
         Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
         Assert.Equal(new[] { "GET", "HEAD" }, response.Content.Headers.Allow.OrderBy(m => m));
-        Assert.Equal("Method not allowed.", await response.Content.ReadAsStringAsync());
+        Assert.Equal(RejectionPage.MethodNotAllowed, await response.Content.ReadAsStringAsync());
     }
 
     [Fact]

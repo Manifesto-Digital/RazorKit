@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using Manifesto.RazorKit.Filters;
 using Manifesto.RazorKit.Tests.Support;
 using static Manifesto.RazorKit.Tests.Support.RazorKitRequests;
 
@@ -192,8 +193,8 @@ public class RequestProvenanceTests
 
         var response = await PostWithHeadersAsync(host, h => h.TryAddWithoutValidation("Origin", "https://other.example"));
 
-        Assert.Equal("Request rejected.", await response.Content.ReadAsStringAsync());
-        Assert.Equal("text/plain", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(RejectionPage.Forbidden("origin-mismatch"), await response.Content.ReadAsStringAsync());
+        Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
     }
 
     [Theory]

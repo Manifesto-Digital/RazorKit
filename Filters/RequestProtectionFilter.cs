@@ -15,16 +15,12 @@ namespace Manifesto.RazorKit.Filters;
 /// 1. the request must come from this site (Sec-Fetch-Site, or Origin when that is absent);
 /// 2. the body must be a URL-encoded form within the size limits, read here under those limits;
 /// 3. the RazorKit token cookie and form field must match.
-/// Rejections carry a static body and never echo any part of the request.
+/// Rejections carry a fixed page (<see cref="RejectionPage"/>) and never echo any part of the request.
 /// </summary>
 internal sealed partial class RequestProtectionFilter : IAsyncResourceFilter
 {
     internal const string RejectHeader = "X-RazorKit-Reject";
     internal const string PropsJsonField = "propsJson";
-
-    private const string RejectedBody = "Request rejected.";
-    private const string TooLargeBody = "Request too large.";
-    private const string UnsupportedMediaTypeBody = "Unsupported media type.";
 
     // RazorKit's client posts two fields. The rest is headroom, not an invitation.
     private const int MaxFormValues = 8;
@@ -73,20 +69,20 @@ internal sealed partial class RequestProtectionFilter : IAsyncResourceFilter
 
         if (request.ContentLength > _maxBodyBytes)
         {
-            RejectBody(context, StatusCodes.Status413PayloadTooLarge, TooLargeBody);
+            RejectBody(context, StatusCodes.Status413PayloadTooLarge, RejectionPage.TooLarge);
             return;
         }
 
         if (!IsUrlEncodedForm(request.ContentType))
         {
-            RejectBody(context, StatusCodes.Status415UnsupportedMediaType, UnsupportedMediaTypeBody);
+            RejectBody(context, StatusCodes.Status415UnsupportedMediaType, RejectionPage.UnsupportedMediaType);
             return;
         }
 
         var form = await ReadFormWithinLimitsAsync(context.HttpContext);
         if (form is null)
         {
-            RejectBody(context, StatusCodes.Status413PayloadTooLarge, TooLargeBody);
+            RejectBody(context, StatusCodes.Status413PayloadTooLarge, RejectionPage.TooLarge);
             return;
         }
 
@@ -242,22 +238,15 @@ internal sealed partial class RequestProtectionFilter : IAsyncResourceFilter
         }
 
         context.HttpContext.Response.Headers[RejectHeader] = code;
-        context.Result = StaticResult(StatusCodes.Status403Forbidden, RejectedBody);
+        context.Result = RejectionPage.Result(StatusCodes.Status403Forbidden, RejectionPage.Forbidden(code));
     }
 
-    private void RejectBody(ResourceExecutingContext context, int statusCode, string body)
+    private void RejectBody(ResourceExecutingContext context, int statusCode, string page)
     {
         var route = context.ActionDescriptor.AttributeRouteInfo?.Template ?? context.ActionDescriptor.DisplayName;
         LogBodyRejected(_logger, statusCode, route);
-        context.Result = StaticResult(statusCode, body);
+        context.Result = RejectionPage.Result(statusCode, page);
     }
-
-    private static ContentResult StaticResult(int statusCode, string body) => new()
-    {
-        StatusCode = statusCode,
-        Content = body,
-        ContentType = "text/plain; charset=utf-8"
-    };
 
     [LoggerMessage(EventId = 1, Level = LogLevel.Warning,
         Message = "RazorKit rejected a request ({RejectCode}) on {Route}.")]

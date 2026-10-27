@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using Manifesto.RazorKit.Filters;
 using Manifesto.RazorKit.Tests.Support;
 using static Manifesto.RazorKit.Tests.Support.RazorKitRequests;
 
@@ -23,7 +24,7 @@ public class BodyLimitTests
     private static async Task AssertTooLargeAsync(HttpResponseMessage response)
     {
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
-        Assert.Equal("Request too large.", await response.Content.ReadAsStringAsync());
+        Assert.Equal(RejectionPage.TooLarge, await response.Content.ReadAsStringAsync());
     }
 
     private static HttpRequestMessage PostContent(IssuedToken token, HttpContent content)
@@ -136,7 +137,7 @@ public class BodyLimitTests
         var response = await host.Client.SendAsync(PostContent(token, content));
 
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
-        Assert.Equal("Unsupported media type.", await response.Content.ReadAsStringAsync());
+        Assert.Equal(RejectionPage.UnsupportedMediaType, await response.Content.ReadAsStringAsync());
     }
 
     [Fact]

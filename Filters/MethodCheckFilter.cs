@@ -1,14 +1,11 @@
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace Manifesto.RazorKit.Filters;
 
-/// <summary>Answers anything other than GET and HEAD with a 405 and a static body.</summary>
+/// <summary>Answers anything other than GET and HEAD with a 405 and a fixed page.</summary>
 internal sealed class MethodCheckFilter : IResourceFilter
 {
-    internal const string MethodNotAllowedBody = "Method not allowed.";
-
     public void OnResourceExecuting(ResourceExecutingContext context)
     {
         // Reads the request method, which host method-override middleware can change after routing.
@@ -21,12 +18,7 @@ internal sealed class MethodCheckFilter : IResourceFilter
         }
 
         context.HttpContext.Response.Headers.Allow = "GET, HEAD";
-        context.Result = new ContentResult
-        {
-            StatusCode = StatusCodes.Status405MethodNotAllowed,
-            Content = MethodNotAllowedBody,
-            ContentType = "text/plain; charset=utf-8"
-        };
+        context.Result = RejectionPage.Result(StatusCodes.Status405MethodNotAllowed, RejectionPage.MethodNotAllowed);
     }
 
     public void OnResourceExecuted(ResourceExecutedContext context)
