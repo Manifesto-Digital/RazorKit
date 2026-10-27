@@ -1,0 +1,7 @@
+@model Manifesto.RazorKit.Tests.Components.Organisms.Slider.SliderProps
+<section class="slider" data-arrows="@Model.ShowArrows.ToString().ToLowerInvariant()">
+    @foreach (var item in Model.Items)
+    {
+        <div class="slide">@await Html.PartialAsync(Model.ItemTemplatePath!, item)</div>
+    }
+</section>

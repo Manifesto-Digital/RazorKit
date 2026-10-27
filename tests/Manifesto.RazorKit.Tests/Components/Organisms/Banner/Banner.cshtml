@@ -1,0 +1,8 @@
+@model Manifesto.RazorKit.Tests.Components.Organisms.Banner.BannerProps
+<section class="banner" data-picture="@(Model.Picture?.Src ?? "none")">
+    <h1>@Model.Title</h1>
+    @if (Model.Action != null)
+    {
+        @await Html.PartialAsync("~/Components/Atoms/Action/Action.cshtml", Model.Action)
+    }
+</section>

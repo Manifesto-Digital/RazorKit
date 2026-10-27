@@ -6,9 +6,18 @@
 @model Manifesto.RazorKit.Pages.RazorKitPageModel
 
 @functions {
+    // Members declared as an interface are written as their runtime type, so the textarea holds every
+    // value the story set (a derived type's own members included) and posts back what was rendered.
+    private static readonly JsonSerializerOptions ControlsJsonOptions = new()
+    {
+        Converters = { new Manifesto.RazorKit.Converters.InterfaceToConcreteConverter() }
+    };
+
     private string SerializePropertyValue(object? value)
     {
-        if (value == null)
+        // A bare object is the page model's placeholder for a member the story leaves unset. Written
+        // as {} it would post back as an empty instance where the story had none.
+        if (value == null || value.GetType() == typeof(object))
             return "null";
             
         // Special handling for IHtmlContent - convert to HTML string
@@ -19,7 +28,18 @@
             return JsonSerializer.Serialize(writer.ToString());
         }
         
-        return JsonSerializer.Serialize(value);
+        try
+        {
+            return JsonSerializer.Serialize(value, ControlsJsonOptions);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The runtime type can hold what no serializer writes (a delegate, a Type, a cycle) or a getter
+            // that throws anything at all, as the controller's per-member fallback already assumes. One such
+            // member must not take the whole explorer page down; its Controls field is left empty.
+            // Nothing from the value goes to a log.
+            return "null";
+        }
     }
 }
 
@@ -932,7 +952,16 @@
                         <div class="razorkit-component-code" id="component-code">
                             @{
                                 var codeInstance = Model.CreateDefaultsInstance();
-                                var propsJson = System.Text.Json.JsonSerializer.Serialize(codeInstance, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                                // Same unserialisable-member risk as SerializePropertyValue; the code sample is then empty.
+                                string propsJson;
+                                try
+                                {
+                                    propsJson = System.Text.Json.JsonSerializer.Serialize(codeInstance, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                                }
+                                catch (Exception ex) when (ex is not OperationCanceledException)
+                                {
+                                    propsJson = "{\n}";
+                                }
                             }
                             <div style="color: #059669;">@@await Html.PartialAsync("@selectedComponent.Path", new @(selectedComponent.Name)Props</div>
                             <div style="color: #dc2626;">{</div>
