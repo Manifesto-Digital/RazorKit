@@ -657,7 +657,9 @@ function readControls(form) {
         }
     }
 
-    return { url: `/razorkit-preview/preview/${componentName}/${storyName}`, props: props };
+    // The server gives the preview route under the host's path base, so a site mounted under a
+    // sub-path posts to its own preview.
+    return { url: `${razorKitData.previewUrl}/${componentName}/${storyName}`, props: props };
 }
 
 function postToIframe(iframe, url, data) {
