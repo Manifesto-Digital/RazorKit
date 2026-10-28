@@ -14,17 +14,18 @@
     
     <!-- NuGet Package Metadata -->
     <PackageId>Manifesto.RazorKit</PackageId>
-    <Version>0.2.0</Version>
-    <PackageReleaseNotes>0.2.0: security and reliability improvements. Upgrade by bumping the package version; no code changes are required.
-- If your site runs behind a proxy or CDN, configure ASP.NET Core forwarded headers with your proxy's addresses so client IPs are correct, and set RazorKitOptions.AllowedOrigins to your public URL.
-- MapRazorKit() is optional: if your site already calls MapControllers() and MapRazorPages(), you don't need it.
-- axe-core is now bundled with the package; a CSP no longer needs to allow unpkg.com for RazorKit.
-- The public constructors of RazorKit's controller, page model and services take additional parameters (affects only code that constructs them directly).
-- When two stories share a name, the first one now wins.
-- Rate-limit rejection logs identify clients by a short per-process tag, not by IP address.
-- The preview's invalid-JSON message is now a fixed message; details are shown only in Development.
-- Live editing in the Controls panel needs HTTPS, or localhost.
-- If your site has its own Pages/RazorKit.cshtml (for example from an in-repo copy of RazorKit), delete it: it overrides the package's page.</PackageReleaseNotes>
+    <Version>0.3.0</Version>
+    <PackageReleaseNotes>0.3.0: theming, mobile support and accessibility. Upgrade by bumping the package version; no code changes are required.
+- Themes: configure RazorKitOptions.Themes (a list of Name and DataTheme) to get a theme dropdown in the toolbar; the preview is rendered with data-theme set to the chosen theme. The choice is kept in the URL (?theme=) and remembered in the browser. With no themes configured the preview sets no theme. The old built-in "charity" default theme is removed: if your site relied on it, add it to RazorKitOptions.Themes.
+- Mobile: on narrow screens the component list and the Controls panel become slide-out panels (one open at a time) and the preview uses the device width.
+- Accessibility: RazorKit's own interface now uses real buttons, keyboard navigation, visible focus, labelled controls and improved contrast (working towards WCAG 2.2 AA).
+- Edits in the Controls panel now survive viewport and theme changes.
+- "Open in new window" opens the current, edited preview in a new tab.
+- A single reset button ("Reset to story values", or "Reset to defaults" when the story sets no values) replaces the two previous ones.
+- When a preview is refused (for example too many requests), the preview area shows a short readable message.
+- GET previews now count towards the render concurrency limit (MaxConcurrentRenders), and viewport or theme changes with edited values count as renders.
+- RazorKit's page script and styles are now served as package files rather than inline, so a host Content-Security-Policy no longer needs to allow inline script for RazorKit's page (inline styles are still used).
+- Fixed: editing a story in the Controls panel (or switching viewport or theme) no longer breaks components whose props are typed as an interface or object.</PackageReleaseNotes>
     <Authors>Manifesto Digital</Authors>
     <Company>Manifesto Digital</Company>
     <Description>A component preview and development tool for ASP.NET Core Razor components. Provides an interactive UI for developing, testing, and documenting reusable Razor components, inspired by Storybook.</Description>
