@@ -144,6 +144,14 @@ public class RazorKitPageModel : PageModel
     }
 
     /// <summary>
+    /// The reset button's label: what resetting the controls returns them to. A story that sets
+    /// props is reset to its own values; otherwise the controls hold the component defaults.
+    /// </summary>
+    public string ResetLabel => SelectedStory is { Properties.Count: > 0 }
+        ? "Reset to story values"
+        : "Reset to defaults";
+
+    /// <summary>
     /// Stories for the sidebar. Looked up per component while the view renders, as the view always did.
     /// </summary>
     public List<ComponentStory> GetStories(string componentName) => _storyService.GetStoriesForComponent(componentName);

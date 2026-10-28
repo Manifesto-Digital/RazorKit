@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace Manifesto.RazorKit.Filters;
@@ -11,8 +10,6 @@ namespace Manifesto.RazorKit.Filters;
 /// </summary>
 internal sealed class ConcurrencyLimitFilter : IAsyncResourceFilter
 {
-    internal const string RejectionBody = "RazorKit is busy. Try again shortly.";
-
     private readonly RazorKitRateLimiter _limiter;
 
     public ConcurrencyLimitFilter(RazorKitRateLimiter limiter)
@@ -32,12 +29,7 @@ internal sealed class ConcurrencyLimitFilter : IAsyncResourceFilter
         if (!slot.IsAcquired)
         {
             context.HttpContext.Response.Headers.RetryAfter = "1";
-            context.Result = new ContentResult
-            {
-                StatusCode = StatusCodes.Status503ServiceUnavailable,
-                ContentType = "text/plain",
-                Content = RejectionBody
-            };
+            context.Result = RejectionPage.Result(StatusCodes.Status503ServiceUnavailable, RejectionPage.Busy);
             return;
         }
 
