@@ -185,6 +185,28 @@ This generates preview HTML with paths like:
 - `/_content/YourProject.Components/css/main.css`
 - `/_content/YourProject.Components/js/main.js`
 
+#### Themes
+
+If your component library styles itself from a `data-theme` attribute, list the themes and RazorKit sets the attribute on the preview's `<html>` element:
+
+```csharp
+builder.Services.AddRazorKit(options =>
+{
+    options.Themes = new List<RazorKitTheme>
+    {
+        new() { Name = "Light", DataTheme = "light" },
+        new() { Name = "Dark", DataTheme = "dark" }
+    };
+});
+```
+
+- The first theme is the default. With one theme it is always applied; with two or more, a theme dropdown appears in the toolbar. With none, the preview sets no `data-theme`.
+- The chosen theme travels as `?theme=<Name>` on RazorKit's links, so a shared link opens in the same theme, and the browser remembers the last choice for links without one.
+- A `?theme=` that does not exactly match a configured `Name` is ignored and the default is used.
+- `Name` must be unique (ignoring case). `DataTheme` may only contain letters, digits, hyphens and underscores. An invalid entry stops the application at startup.
+
+The list binds from configuration too, for example `builder.Configuration.GetSection("RazorKit:Themes").Bind(options.Themes)` with entries of `Name` and `DataTheme`.
+
 #### Custom Component Discovery
 
 Implement `IComponentDiscovery` to customize how components are discovered:
