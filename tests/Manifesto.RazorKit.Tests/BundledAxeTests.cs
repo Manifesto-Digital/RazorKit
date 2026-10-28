@@ -1,4 +1,5 @@
 using System.Net;
+using Manifesto.RazorKit.Tests.Support;
 using Microsoft.AspNetCore.Builder;
 using static Manifesto.RazorKit.Tests.Support.RazorKitRequests;
 
@@ -28,22 +29,32 @@ public class BundledAxeTests
     [Fact]
     public async Task The_explorer_page_does_not_load_axe_from_a_third_party_host()
     {
-        await using var host = await TestHost.StartAsync();
+        await using var host = await TestHost.StartAsync(PageAssets.WithStaticFiles());
 
-        var html = await (await host.Client.GetAsync(ShellPath)).Content.ReadAsStringAsync();
+        var html = await PageAssets.LoadPageAsync(host.Client);
+        var script = await (await host.Client.GetAsync(PageAssets.ScriptUrl(html))).Content.ReadAsStringAsync();
 
+        // The page script now lives in its own file, so both the page and the script are checked.
         Assert.DoesNotContain("unpkg.com", html);
+        Assert.DoesNotContain("unpkg.com", script);
     }
 
     [Fact]
     public async Task The_snippet_embeds_the_component_path_and_name_as_json_string_literals()
     {
-        await using var host = await TestHost.StartAsync();
+        await using var host = await TestHost.StartAsync(PageAssets.WithStaticFiles());
 
-        var html = await (await host.Client.GetAsync(ShellPath)).Content.ReadAsStringAsync();
+        var html = await PageAssets.LoadPageAsync(host.Client);
+        var script = await (await host.Client.GetAsync(PageAssets.ScriptUrl(html))).Content.ReadAsStringAsync();
 
-        // The snippet is written with textContent, so the JS strings must hold raw text, not HTML entities.
-        Assert.Contains("Html.PartialAsync(\"' + \"~/Components/Atoms/Button/Button.cshtml\" + '\", new ' + \"Button\" + 'Props'", html);
+        // The snippet is written with textContent, so the values must reach the script as raw text,
+        // not HTML entities: the page carries them as JSON string literals in the data block...
+        var data = PageAssets.DataBlockSource(html);
+        Assert.Contains("\"componentPath\":\"~/Components/Atoms/Button/Button.cshtml\"", data);
+        Assert.Contains("\"componentName\":\"Button\"", data);
+
+        // ...and the script builds the snippet line from those parsed values.
+        Assert.Contains("Html.PartialAsync(\"' + razorKitData.componentPath + '\", new ' + razorKitData.componentName + 'Props'", script);
     }
 
     [Fact]
