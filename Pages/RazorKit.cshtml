@@ -31,6 +31,10 @@
     var properties = Model.ComponentProperties;
     var defaultValues = Model.DefaultValues;
     var initialIframeUrl = Model.InitialIframeUrl;
+    // The frame's accessible name, so a screen reader user knows which story the frame shows.
+    var previewTitle = selectedComponent == null
+        ? "Component preview"
+        : "Component preview: " + selectedComponent.Name + (selectedStory != null ? " / " + selectedStory.DisplayName : "");
 }
 
 <!DOCTYPE html>
@@ -45,11 +49,35 @@
 </head>
 <body class="razorkit-page">
     <div class="razorkit-layout">
-        <div class="razorkit-header">
-            <div class="razorkit-logo">📖 RazorKit</div>
+        @* Landmarks are given as ARIA roles on the existing divs rather than as header/nav/main/aside
+           elements: the consumer's own stylesheet is loaded into this page, and site rules for those
+           elements (sticky headers, nav colours) would otherwise restyle RazorKit's chrome. *@
+        <div class="razorkit-header" role="banner">
+            @* The two panel toggles only show at the narrow breakpoint, where the sidebar and the
+               controls become slide-over panels and only one may be open at a time. *@
+            <button type="button" class="razorkit-panel-toggle" id="razorkit-components-toggle" data-razorkit-action="toggle-panel" data-razorkit-panel="components" aria-controls="razorkit-sidebar" aria-expanded="false">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
+                    <rect x="1" y="3" width="14" height="2" />
+                    <rect x="1" y="7" width="14" height="2" />
+                    <rect x="1" y="11" width="14" height="2" />
+                </svg>
+                <span>Components</span>
+            </button>
 
-            <button class="razorkit-show-controls-btn" data-razorkit-action="layout" data-razorkit-layout="side" title="Show Controls Panel" style="display: none;">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <div class="razorkit-logo" role="heading" aria-level="1"><span aria-hidden="true">📖</span> RazorKit</div>
+
+            <button type="button" class="razorkit-panel-toggle" id="razorkit-controls-toggle" data-razorkit-action="toggle-panel" data-razorkit-panel="controls" aria-controls="razorkit-controls" aria-expanded="false">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
+                    <rect x="1" y="3" width="14" height="2" />
+                    <circle cx="10" cy="4" r="2" />
+                    <rect x="1" y="11" width="14" height="2" />
+                    <circle cx="5" cy="12" r="2" />
+                </svg>
+                <span>Controls</span>
+            </button>
+
+            <button type="button" class="razorkit-show-controls-btn" data-razorkit-action="layout" data-razorkit-layout="side" title="Show Controls Panel" style="display: none;">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
                     <rect x="1" y="1" width="10" height="14" stroke="currentColor" stroke-width="1" fill="none" />
                     <rect x="12" y="1" width="3" height="14" fill="currentColor" />
                 </svg>
@@ -57,8 +85,8 @@
             </button>
 
             <div class="razorkit-header-actions">
-                <button class="razorkit-open-window-btn" data-razorkit-action="open-window" title="Open Component in New Window">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <button type="button" class="razorkit-open-window-btn" data-razorkit-action="open-window" title="Open Component in New Window">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
                         <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1ZM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Z" />
                         <path d="M5.5 5.5A.5.5 0 0 1 6 5h2a.5.5 0 0 1 0 1H6.707l2.647 2.646a.5.5 0 0 1-.708.708L6 6.707V8a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5Z" />
                         <path d="M10 2a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0V2.707l-2.146 2.147a.5.5 0 0 1-.708-.708L12.293 2H10.5A.5.5 0 0 1 10 2Z" />
@@ -68,7 +96,7 @@
             </div>
 
             <div class="razorkit-viewport-controls">
-                <select id="viewport-selector" class="razorkit-viewport-select">
+                <select id="viewport-selector" class="razorkit-viewport-select" aria-label="Preview width">
                     <option value="responsive">📱 Responsive</option>
                     <option value="mobile">📱 Mobile (375px)</option>
                     <option value="tablet">📱 Tablet (768px)</option>
@@ -79,12 +107,15 @@
 
                 @if (Model.ShowThemeSelector)
                 {
-                    <select id="theme-selector" class="razorkit-viewport-select" aria-label="Preview theme" title="Preview theme" autocomplete="off">
-                        @foreach (var themeName in Model.ThemeNames)
-                        {
-                            <option value="@themeName" selected="@(themeName == Model.SelectedThemeName)">@themeName</option>
-                        }
-                    </select>
+                    <span class="razorkit-theme-control">
+                        <label class="razorkit-header-label" for="theme-selector">Theme</label>
+                        <select id="theme-selector" class="razorkit-viewport-select" aria-label="Preview theme" title="Preview theme" autocomplete="off">
+                            @foreach (var themeName in Model.ThemeNames)
+                            {
+                                <option value="@themeName" selected="@(themeName == Model.SelectedThemeName)">@themeName</option>
+                            }
+                        </select>
+                    </span>
                 }
 
                 <div class="razorkit-viewport-info" id="viewport-info">
@@ -93,7 +124,7 @@
             </div>
         </div>
 
-        <div class="razorkit-sidebar">
+        <div class="razorkit-sidebar" id="razorkit-sidebar" role="navigation" aria-label="Components">
             @if (components.Any())
             {
                 <div class="razorkit-component-list">
@@ -107,12 +138,12 @@
                                 var isComponentSelected = selectedComponent?.Name == component.Name;
 
                                 <div class="razorkit-component-section">
-                                    <!-- Component Name -->
-                                    <div class="razorkit-component-name @(isComponentSelected ? "active" : "")"
-                                         data-razorkit-action="toggle-stories" data-razorkit-component="@component.Name.ToLower()">
-                                        <span class="razorkit-toggle-icon">@(isComponentSelected ? "▼" : "▶")</span>
+                                    <button type="button" class="razorkit-component-name @(isComponentSelected ? "active" : "")"
+                                            data-razorkit-action="toggle-stories" data-razorkit-component="@component.Name.ToLower()"
+                                            aria-expanded="@(isComponentSelected ? "true" : "false")" aria-controls="stories-@component.Name.ToLower()">
+                                        <span class="razorkit-toggle-icon" aria-hidden="true">@(isComponentSelected ? "▼" : "▶")</span>
                                         @component.Name
-                                    </div>
+                                    </button>
 
                                     <!-- Stories List -->
                                     <div class="razorkit-story-list @(isComponentSelected ? "expanded" : "")" id="stories-@component.Name.ToLower()">
@@ -136,18 +167,18 @@
 
         <!-- Main Content -->
         <div class="razorkit-content">
-            <div class="razorkit-preview">
+            <div class="razorkit-preview" role="main">
                 @if (selectedComponent != null)
                 {
                     @if (selectedStory != null)
                     {
-                        <div style="padding: 1rem 2rem; border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
-                            <h2 style="margin: 0 0 0.5rem 0; font-size: 1.25rem; font-weight: 600; color: #1f2937;">
+                        <div class="razorkit-story-header">
+                            <h2 class="razorkit-story-title">
                                 @selectedComponent.Name / @selectedStory.DisplayName
                             </h2>
                             @if (!string.IsNullOrEmpty(selectedStory.Description))
                             {
-                                <p style="margin: 0; color: #6b7280; font-size: 0.875rem;">@selectedStory.Description</p>
+                                <p class="razorkit-story-description">@selectedStory.Description</p>
                             }
                         </div>
                     }
@@ -159,6 +190,7 @@
                                 <iframe id="preview-iframe"
                                         name="preview-iframe"
                                         src="@initialIframeUrl"
+                                        title="@previewTitle"
                                         frameborder="0"
                                         style="height: 600px; border: none; background: white;">
                                 </iframe>
@@ -184,26 +216,26 @@
                 }
             </div>
 
-            <div class="razorkit-controls">
-                <div class="razorkit-control-section">
+            <div class="razorkit-controls" id="razorkit-controls" role="complementary" aria-label="Controls">
+                <div class="razorkit-control-section razorkit-layout-section">
                     <div class="razorkit-control-section-title">Layout</div>
                     <div class="razorkit-layout-controls">
-                        <button data-razorkit-action="layout" data-razorkit-layout="side" title="Side Layout" class="razorkit-layout-btn active" id="layout-side">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <button type="button" data-razorkit-action="layout" data-razorkit-layout="side" title="Side Layout" class="razorkit-layout-btn active" id="layout-side">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
                                 <rect x="1" y="1" width="5" height="14" fill="currentColor" />
                                 <rect x="7" y="1" width="8" height="14" stroke="currentColor" stroke-width="1" fill="none" />
                             </svg>
                             <span>Side</span>
                         </button>
-                        <button data-razorkit-action="layout" data-razorkit-layout="bottom" title="Bottom Layout" class="razorkit-layout-btn" id="layout-bottom">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <button type="button" data-razorkit-action="layout" data-razorkit-layout="bottom" title="Bottom Layout" class="razorkit-layout-btn" id="layout-bottom">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
                                 <rect x="1" y="1" width="14" height="8" stroke="currentColor" stroke-width="1" fill="none" />
                                 <rect x="1" y="10" width="14" height="5" fill="currentColor" />
                             </svg>
                             <span>Bottom</span>
                         </button>
-                        <button data-razorkit-action="layout" data-razorkit-layout="hidden" title="Hide Controls Panel" class="razorkit-layout-btn" id="layout-hidden">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <button type="button" data-razorkit-action="layout" data-razorkit-layout="hidden" title="Hide Controls Panel" class="razorkit-layout-btn" id="layout-hidden">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
                                 <rect x="1" y="1" width="14" height="14" stroke="currentColor" stroke-width="1" fill="none" />
                                 <line x1="5" y1="5" x2="11" y2="11" stroke="currentColor" stroke-width="2" />
                                 <line x1="11" y1="5" x2="5" y2="11" stroke="currentColor" stroke-width="2" />
@@ -226,7 +258,7 @@
                             @foreach (var prop in properties)
                             {
                                 <div class="razorkit-form-group">
-                                    <label class="razorkit-form-label" for="@prop.Name">
+                                    <label class="razorkit-form-label" for="razorkit-prop-@prop.Name">
                                         @prop.DisplayName
                                         @if (!string.IsNullOrEmpty(prop.Description))
                                         {
@@ -238,6 +270,7 @@
                                     {
                                         <label class="razorkit-checkbox-label">
                                             <input type="checkbox"
+                                                   id="razorkit-prop-@prop.Name"
                                                    class="razorkit-checkbox-control"
                                                    name="@prop.Name"
                                                    value="true"
@@ -248,7 +281,7 @@
                                     }
                                     else if (prop.IsEnum && prop.EnumValues != null)
                                     {
-                                        <select name="@prop.Name" class="razorkit-form-control">
+                                        <select id="razorkit-prop-@prop.Name" name="@prop.Name" class="razorkit-form-control">
                                             @foreach (var enumValue in prop.EnumValues)
                                             {
                                                 <option value="@enumValue"
@@ -262,6 +295,7 @@
                                     {
                                         var jsonValue = SerializePropertyValue(defaultValues.GetValueOrDefault(prop.Name));
                                         <textarea class="razorkit-form-control"
+                                               id="razorkit-prop-@prop.Name"
                                                name="@prop.Name"
                                                rows="5"
                                                placeholder="Enter JSON for @prop.DisplayName.ToLower()"
@@ -271,6 +305,7 @@
                                     else
                                     {
                                         <input type="text"
+                                               id="razorkit-prop-@prop.Name"
                                                class="razorkit-form-control"
                                                name="@prop.Name"
                                                value="@(defaultValues.GetValueOrDefault(prop.Name)?.ToString() ?? "")"
@@ -292,12 +327,13 @@
 
                     <div class="razorkit-control-section">
                         <div class="razorkit-control-section-title">Component Code</div>
-                        <div class="razorkit-component-code" id="component-code">
+                        @* Focusable so a keyboard user can scroll long lines sideways. *@
+                        <div class="razorkit-component-code" id="component-code" tabindex="0" role="region" aria-label="Component code">
                             @{
                                 var codeInstance = Model.CreateDefaultsInstance();
                                 var propsJson = System.Text.Json.JsonSerializer.Serialize(codeInstance, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
                             }
-                            <div style="color: #059669;">@@await Html.PartialAsync("@selectedComponent.Path", new @(selectedComponent.Name)Props</div>
+                            <div style="color: #047857;">@@await Html.PartialAsync("@selectedComponent.Path", new @(selectedComponent.Name)Props</div>
                             <div style="color: #dc2626;">{</div>
                             @foreach (var line in propsJson.Split('\n').Skip(1).Take(propsJson.Split('\n').Length - 2))
                             {
@@ -309,16 +345,16 @@
 
                     <!-- Accessibility Panel -->
                     <div class="razorkit-a11y-panel">
-                        <div class="razorkit-a11y-header" data-razorkit-action="toggle-a11y">
-                            <span>♿ Accessibility</span>
-                            <span id="a11y-toggle-icon">▶</span>
-                        </div>
+                        <button type="button" class="razorkit-a11y-header" data-razorkit-action="toggle-a11y" aria-expanded="false" aria-controls="a11y-content">
+                            <span><span aria-hidden="true">♿</span> Accessibility</span>
+                            <span id="a11y-toggle-icon" aria-hidden="true">▶</span>
+                        </button>
                         <div class="razorkit-a11y-content" id="a11y-content">
                             <div class="razorkit-a11y-summary">
-                                <button class="razorkit-a11y-run-button" data-razorkit-action="run-a11y" id="a11y-run-button">
+                                <button type="button" class="razorkit-a11y-run-button" data-razorkit-action="run-a11y" id="a11y-run-button">
                                     Run Accessibility Test
                                 </button>
-                                <div id="a11y-summary"></div>
+                                <div id="a11y-summary" role="status"></div>
                             </div>
                             <div class="razorkit-a11y-issues" id="a11y-issues"></div>
                         </div>

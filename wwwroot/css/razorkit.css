@@ -37,26 +37,20 @@
         padding: 1rem 0;
     }
 
+    /* Each layout names its rows. With unnamed auto rows the panes were sized from their content,
+       and an empty or short row took a share of the height that belonged to the preview. */
     .razorkit-page .razorkit-content {
         grid-area: content;
         display: grid;
         grid-template-columns: 1fr 320px;
-        grid-template-areas: "preview controls" "bottom bottom";
+        grid-template-rows: minmax(0, 1fr);
+        grid-template-areas: "preview controls";
         overflow: hidden;
     }
 
     /* Layout Modes */
 
-    /* Bottom Layout */
-    .razorkit-page.layout-bottom {
-        grid-template-columns: 280px 1fr;
-        grid-template-rows: 60px 1fr 280px;
-        grid-template-areas:
-            "header header"
-            "sidebar content"
-            "controls controls";
-    }
-
+    /* Bottom Layout: the controls sit under the preview inside the content grid. */
         .razorkit-page.layout-bottom .razorkit-controls {
             grid-area: bottom;
             border-left: none;
@@ -72,6 +66,7 @@
 
     .razorkit-page.layout-bottom .razorkit-content {
         grid-template-columns: 1fr;
+        grid-template-rows: minmax(0, 1fr) auto;
         grid-template-areas: "preview" "bottom";
     }
 
@@ -86,6 +81,28 @@
         background: #fff;
         overflow-y: auto;
         position: relative;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .razorkit-page .razorkit-story-header {
+        flex: none;
+        padding: 1rem 2rem;
+        border-bottom: 1px solid #e5e7eb;
+        background: #f9fafb;
+    }
+
+    .razorkit-page .razorkit-story-title {
+        margin: 0 0 0.5rem 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    .razorkit-page .razorkit-story-description {
+        margin: 0;
+        color: #6b7280;
+        font-size: 0.875rem;
     }
 
     .razorkit-page .razorkit-controls {
@@ -123,10 +140,11 @@
             border-color: #9ca3af;
         }
 
+        /* #2563eb rather than #3b82f6: white text on the lighter blue is below 4.5:1. */
         .razorkit-page .razorkit-layout-btn.active {
-            background: #3b82f6;
+            background: #2563eb;
             color: #fff;
-            border-color: #3b82f6;
+            border-color: #2563eb;
         }
 
         .razorkit-page .razorkit-layout-btn svg {
@@ -139,7 +157,7 @@
         align-items: center;
         gap: 0.5rem;
         padding: 0.5rem 1rem;
-        background: #3b82f6;
+        background: #2563eb;
         color: white;
         border: none;
         border-radius: 0.375rem;
@@ -149,7 +167,7 @@
     }
 
         .razorkit-page .razorkit-show-controls-btn:hover {
-            background: #2563eb;
+            background: #1d4ed8;
         }
 
     /* Header Actions */
@@ -183,9 +201,13 @@
             cursor: not-allowed;
         }
 
+    /* The canvas fills what is left of the preview pane under the story header. It used to take a
+       min-height from the window (100vh - 120px), which ignored the story header and the Bottom
+       layout's controls: the pane always scrolled, and in Bottom layout the component was centred
+       in a canvas taller than the pane, so most of it sat below the visible area. */
     .razorkit-page .razorkit-preview-area {
         padding: 2rem;
-        min-height: calc(100vh - 120px);
+        flex: 1 0 auto;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -223,9 +245,16 @@
         margin-bottom: 0.5rem;
     }
 
+    /* A button, reset so it keeps the look of the row it replaced. */
     .razorkit-page .razorkit-component-name {
         display: flex;
         align-items: center;
+        width: 100%;
+        margin: 0;
+        border: none;
+        background: none;
+        font-family: inherit;
+        text-align: left;
         padding: 0.5rem 1rem;
         color: #374151;
         font-weight: 500;
@@ -254,14 +283,19 @@
         transition: transform 0.15s ease;
     }
 
+    /* Collapsed lists are also hidden, so their links leave the tab order. Visibility switches at
+       the end of the collapse and at the start of the expand, so the animation is kept. Expanded
+       content inherits rather than forcing visible, so a closed narrow-screen panel stays hidden. */
     .razorkit-page .razorkit-story-list {
         max-height: 0;
         overflow: hidden;
-        transition: max-height 0.3s ease;
+        visibility: hidden;
+        transition: max-height 0.3s ease, visibility 0.3s;
     }
 
         .razorkit-page .razorkit-story-list.expanded {
             max-height: 500px;
+            visibility: inherit;
         }
 
     .razorkit-page .razorkit-story-item {
@@ -314,6 +348,7 @@
     }
 
     .razorkit-page .razorkit-form-control {
+        box-sizing: border-box;
         width: 100%;
         padding: 0.5rem 0.75rem;
         border: 1px solid #d1d5db;
@@ -323,7 +358,6 @@
     }
 
         .razorkit-page .razorkit-form-control:focus {
-            outline: none;
             border-color: #3b82f6;
             box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
         }
@@ -356,6 +390,7 @@
         }
 
     .razorkit-page .razorkit-logo {
+        margin: 0;
         font-size: 1.25rem;
         font-weight: 700;
         color: #1f2937;
@@ -387,6 +422,11 @@
     }
 
     .razorkit-page .razorkit-a11y-header {
+        width: 100%;
+        margin: 0;
+        border: none;
+        font-family: inherit;
+        text-align: left;
         padding: 0.75rem 1rem;
         background: #fff;
         border-bottom: 1px solid #e2e8f0;
@@ -406,11 +446,13 @@
     .razorkit-page .razorkit-a11y-content {
         max-height: 0;
         overflow: hidden;
-        transition: max-height 0.3s ease;
+        visibility: hidden;
+        transition: max-height 0.3s ease, visibility 0.3s;
     }
 
         .razorkit-page .razorkit-a11y-content.expanded {
             max-height: 400px;
+            visibility: inherit;
         }
 
     .razorkit-page .razorkit-a11y-summary {
@@ -460,6 +502,12 @@
     }
 
     .razorkit-page .razorkit-a11y-issue-header {
+        width: 100%;
+        margin: 0;
+        border: none;
+        font-family: inherit;
+        text-align: left;
+        gap: 0.5rem;
         padding: 0.75rem;
         background: #f9fafb;
         border-bottom: 1px solid #e5e7eb;
@@ -509,11 +557,13 @@
     .razorkit-page .razorkit-a11y-issue-details {
         max-height: 0;
         overflow: hidden;
+        visibility: hidden;
         transition: max-height 0.3s ease;
     }
 
         .razorkit-page .razorkit-a11y-issue-details.expanded {
             max-height: unset;
+            visibility: inherit;
         }
 
     .razorkit-page .razorkit-a11y-issue-body {
@@ -523,7 +573,7 @@
     }
 
     .razorkit-page .razorkit-a11y-run-button {
-        background: #3b82f6;
+        background: #2563eb;
         color: white;
         border: none;
         padding: 0.5rem 1rem;
@@ -535,7 +585,7 @@
     }
 
         .razorkit-page .razorkit-a11y-run-button:hover {
-            background: #2563eb;
+            background: #1d4ed8;
         }
 
         .razorkit-page .razorkit-a11y-run-button:disabled {
@@ -561,7 +611,6 @@
     }
 
         .razorkit-page .razorkit-viewport-select:focus {
-            outline: none;
             border-color: #3b82f6;
             box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
         }
@@ -641,4 +690,230 @@
     .razorkit-page #preview-iframe {
         width: 100%;
         display: block;
+    }
+
+
+    /* Focus. One visible indicator for every control RazorKit owns; the old focus styles removed the
+       outline and left a 10% tinted shadow that was close to invisible. */
+    .razorkit-page :is(a, button, select, input, textarea, [tabindex]):focus-visible {
+        outline: 2px solid #1d4ed8;
+        outline-offset: 2px;
+    }
+
+    /* Full-width rows sit against the edge of a scrolling panel, which would clip an outer ring. */
+    .razorkit-page :is(.razorkit-component-name, .razorkit-story-item, .razorkit-a11y-header, .razorkit-a11y-issue-header, .razorkit-component-code):focus-visible {
+        outline-offset: -2px;
+    }
+
+    /* Tabbing to the preview moves focus into the frame's document, and Chromium then matches
+       neither :focus nor :focus-visible on the iframe element, so the script sets this class while
+       the frame holds keyboard focus. Inset, because the frame fills its container on narrow screens. */
+    .razorkit-page #preview-iframe.razorkit-frame-focused {
+        outline: 2px solid #1d4ed8;
+        outline-offset: -2px;
+    }
+
+    .razorkit-page .razorkit-theme-control {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .razorkit-page .razorkit-header-label {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #374151;
+    }
+
+    /* Panel toggles: only shown at the narrow breakpoint below. */
+    .razorkit-page .razorkit-panel-toggle {
+        display: none;
+        align-items: center;
+        gap: 0.375rem;
+        min-height: 2.25rem;
+        padding: 0.375rem 0.625rem;
+        background: #fff;
+        color: #374151;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 0.875rem;
+    }
+
+        .razorkit-page .razorkit-panel-toggle:hover {
+            background: #f3f4f6;
+            border-color: #9ca3af;
+        }
+
+        .razorkit-page .razorkit-panel-toggle[aria-expanded="true"] {
+            background: #2563eb;
+            color: #fff;
+            border-color: #2563eb;
+        }
+
+    /* Narrow screens (issue #6). Below 1024px the two 280px/320px columns leave the preview too
+       little width, so the sidebar and the controls become slide-over panels opened from the header,
+       one at a time, and the preview takes the full width. The width presets are hidden and the
+       preview uses the device's own width. The breakpoint matches the script's NARROW_QUERY. */
+    @media (max-width: 1023px) {
+        .razorkit-page .razorkit-layout {
+            grid-template-columns: minmax(0, 1fr);
+            grid-template-rows: auto minmax(0, 1fr);
+            grid-template-areas:
+                "header"
+                "content";
+        }
+
+        .razorkit-page .razorkit-header {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            grid-template-areas:
+                "components logo controls"
+                "actions tools tools";
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+        }
+
+        .razorkit-page .razorkit-panel-toggle {
+            display: inline-flex;
+        }
+
+        .razorkit-page #razorkit-components-toggle {
+            grid-area: components;
+        }
+
+        .razorkit-page #razorkit-controls-toggle {
+            grid-area: controls;
+        }
+
+        .razorkit-page .razorkit-logo {
+            grid-area: logo;
+            font-size: 1rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .razorkit-page .razorkit-header-actions {
+            grid-area: actions;
+        }
+
+        .razorkit-page .razorkit-viewport-controls {
+            grid-area: tools;
+            justify-content: flex-end;
+            min-width: 0;
+        }
+
+        /* The script shows this when the desktop layout is "hidden"; the narrow panels replace it,
+           and its inline display has to be overridden. */
+        .razorkit-page .razorkit-show-controls-btn {
+            display: none !important;
+        }
+
+        .razorkit-page #viewport-selector,
+        .razorkit-page .razorkit-viewport-info,
+        .razorkit-page .razorkit-layout-section {
+            display: none;
+        }
+
+        .razorkit-page .razorkit-theme-control {
+            min-width: 0;
+        }
+
+        .razorkit-page #theme-selector {
+            min-width: 0;
+            max-width: 12rem;
+        }
+
+        .razorkit-page .razorkit-content,
+        .razorkit-page.layout-bottom .razorkit-content,
+        .razorkit-page.layout-hidden .razorkit-content {
+            grid-template-columns: minmax(0, 1fr);
+            grid-template-rows: minmax(0, 1fr);
+            grid-template-areas: "preview";
+        }
+
+        /* Both panels overlay the preview in the same grid cell and slide in from their own edge.
+           Closed panels are hidden as well as moved, so their controls leave the tab order. */
+        .razorkit-page .razorkit-sidebar,
+        .razorkit-page .razorkit-controls,
+        .razorkit-page.layout-bottom .razorkit-controls,
+        .razorkit-page.layout-hidden .razorkit-controls {
+            z-index: 5;
+            visibility: hidden;
+            transition: transform 0.2s ease, visibility 0.2s;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25);
+        }
+
+        .razorkit-page .razorkit-sidebar {
+            grid-area: content;
+            justify-self: start;
+            width: min(20rem, 100%);
+            box-sizing: border-box;
+            transform: translateX(-100%);
+        }
+
+        .razorkit-page .razorkit-controls,
+        .razorkit-page.layout-bottom .razorkit-controls,
+        .razorkit-page.layout-hidden .razorkit-controls {
+            display: block;
+            grid-area: preview;
+            justify-self: end;
+            width: min(22rem, 100%);
+            max-height: none;
+            box-sizing: border-box;
+            border-top: none;
+            border-left: 1px solid #e2e8f0;
+            transform: translateX(100%);
+        }
+
+        .razorkit-page.razorkit-components-open .razorkit-sidebar,
+        .razorkit-page.razorkit-controls-open .razorkit-controls {
+            visibility: visible;
+            transform: none;
+        }
+
+        .razorkit-page .razorkit-story-header {
+            padding: 0.75rem 1rem;
+        }
+
+        /* The preview is the device's width: no canvas margin, frame border or fixed preset width. */
+        .razorkit-page .razorkit-preview-area {
+            padding: 0;
+            align-items: stretch;
+        }
+
+        /* The [class*="viewport-"] twins lift specificity above every saved viewport-* rule (the
+           responsive one sets a canvas margin at 0,4,0), so a saved preset never leaves the narrow
+           preview short of the device's width. */
+        .razorkit-page .razorkit-layout .razorkit-preview-container,
+        .razorkit-page .razorkit-layout .razorkit-preview[class*="viewport-"] .razorkit-preview-container {
+            margin: 0;
+            padding: 0;
+            border: none;
+            border-radius: 0;
+            box-shadow: none;
+        }
+
+        .razorkit-page .razorkit-layout #component-preview,
+        .razorkit-page .razorkit-layout .razorkit-preview[class*="viewport-"] #component-preview {
+            width: 100%;
+        }
+
+        .razorkit-page .razorkit-layout .razorkit-preview #preview-iframe,
+        .razorkit-page .razorkit-layout .razorkit-preview[class*="viewport-"] #preview-iframe {
+            width: 100%;
+            margin: 0;
+            border: none;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .razorkit-page *,
+        .razorkit-page *::before,
+        .razorkit-page *::after {
+            transition: none !important;
+        }
     }
