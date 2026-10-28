@@ -297,6 +297,124 @@ public class RateLimitTests
         }
     }
 
+    private const string WaitingPreview = "/razorkit-preview/preview/waiting/default";
+
+    [Fact]
+    public async Task A_GET_preview_gets_503_with_Retry_After_1_when_every_render_slot_is_held()
+    {
+        await using var host = await TestHost.StartAsync(Limits(maxConcurrent: 1));
+        WaitingGate.Arm();
+        try
+        {
+            var held = host.Client.SendAsync(Post("203.0.113.1", WaitingPreview));
+            await WaitingGate.Entered.WaitAsync(TimeSpan.FromSeconds(10));
+
+            var rejected = await host.Client.SendAsync(Get("203.0.113.2", Preview));
+
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, rejected.StatusCode);
+            AssertRetryAfter(rejected, exactly: 1);
+
+            WaitingGate.Release();
+            Assert.Equal(HttpStatusCode.OK, (await held).StatusCode);
+        }
+        finally
+        {
+            WaitingGate.Release();
+        }
+    }
+
+    [Fact]
+    public async Task A_held_GET_preview_holds_the_slot_against_a_POST_preview()
+    {
+        await using var host = await TestHost.StartAsync(Limits(maxConcurrent: 1));
+        WaitingGate.Arm();
+        try
+        {
+            var held = host.Client.SendAsync(Get("203.0.113.1", WaitingPreview));
+            await WaitingGate.Entered.WaitAsync(TimeSpan.FromSeconds(10));
+
+            var rejected = await host.Client.SendAsync(Post("203.0.113.2"));
+
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, rejected.StatusCode);
+
+            WaitingGate.Release();
+            Assert.Equal(HttpStatusCode.OK, (await held).StatusCode);
+        }
+        finally
+        {
+            WaitingGate.Release();
+        }
+    }
+
+    [Fact]
+    public async Task A_GET_preview_releases_its_slot_when_it_finishes()
+    {
+        await using var host = await TestHost.StartAsync(Limits(maxConcurrent: 1));
+
+        for (var i = 0; i < 3; i++)
+        {
+            Assert.Equal(HttpStatusCode.OK, (await host.Client.SendAsync(Get("203.0.113.1", Preview))).StatusCode);
+        }
+
+        Assert.Equal(HttpStatusCode.OK, (await host.Client.SendAsync(Post("203.0.113.1"))).StatusCode);
+    }
+
+    [Fact]
+    public async Task The_page_shell_does_not_take_a_slot_while_a_GET_preview_is_held()
+    {
+        await using var host = await TestHost.StartAsync(Limits(maxConcurrent: 1));
+        WaitingGate.Arm();
+        try
+        {
+            var held = host.Client.SendAsync(Get("203.0.113.1", WaitingPreview));
+            await WaitingGate.Entered.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal(HttpStatusCode.OK, (await host.Client.SendAsync(Get("203.0.113.2"))).StatusCode);
+
+            WaitingGate.Release();
+            await held;
+        }
+        finally
+        {
+            WaitingGate.Release();
+        }
+    }
+
+    [Fact]
+    public async Task A_GET_preview_is_charged_to_the_page_bucket_and_not_the_render_bucket()
+    {
+        await using var host = await TestHost.StartAsync(Limits(renderBurst: 1, pageBurst: 2));
+
+        Assert.Equal(HttpStatusCode.OK, (await host.Client.SendAsync(Get("203.0.113.1", Preview))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await host.Client.SendAsync(Get("203.0.113.1", Preview))).StatusCode);
+
+        // The page bucket (burst 2) is spent by the two previews; the render bucket is untouched.
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await host.Client.SendAsync(Get("203.0.113.1", Preview))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await host.Client.SendAsync(Post("203.0.113.1"))).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_GET_preview_limited_by_the_page_bucket_is_told_429_not_503_while_slots_are_held()
+    {
+        await using var host = await TestHost.StartAsync(Limits(pageBurst: 1, maxConcurrent: 1));
+        WaitingGate.Arm();
+        try
+        {
+            var held = host.Client.SendAsync(Get("203.0.113.1", WaitingPreview));
+            await WaitingGate.Entered.WaitAsync(TimeSpan.FromSeconds(10));
+
+            var limited = await host.Client.SendAsync(Get("203.0.113.1", Preview));
+
+            Assert.Equal(HttpStatusCode.TooManyRequests, limited.StatusCode);
+            WaitingGate.Release();
+            await held;
+        }
+        finally
+        {
+            WaitingGate.Release();
+        }
+    }
+
     [Fact]
     public async Task A_request_limited_by_the_token_bucket_never_takes_a_render_slot()
     {

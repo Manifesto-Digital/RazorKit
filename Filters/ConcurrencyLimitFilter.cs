@@ -7,6 +7,7 @@ namespace Manifesto.RazorKit.Filters;
 /// <summary>
 /// Caps renders in flight across all clients, answering 503 when none is free. Per-client buckets
 /// alone cannot bound total render work, for example when many clients share one proxy address.
+/// Applies to the GET preview as well as the POST, since both render a component.
 /// </summary>
 internal sealed class ConcurrencyLimitFilter : IAsyncResourceFilter
 {
@@ -21,7 +22,7 @@ internal sealed class ConcurrencyLimitFilter : IAsyncResourceFilter
 
     public async Task OnResourceExecutionAsync(ResourceExecutingContext context, ResourceExecutionDelegate next)
     {
-        if (!RazorKitRequestKind.IsRender(context.HttpContext.Request, context.ActionDescriptor))
+        if (!RazorKitRequestKind.TakesRenderSlot(context.HttpContext.Request, context.ActionDescriptor))
         {
             await next();
             return;
