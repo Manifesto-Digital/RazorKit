@@ -1,0 +1,7 @@
+@model Manifesto.RazorKit.Tests.Components.Organisms.Gallery.GalleryProps
+<section class="gallery"><h2>@Model.Heading</h2>
+    @foreach (var tile in Model.Tiles)
+    {
+        @await Html.PartialAsync("~/Components/Molecules/Tile/Tile.cshtml", tile)
+    }
+</section>

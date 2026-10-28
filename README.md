@@ -146,6 +146,8 @@ public class ButtonStories : ComponentStoriesBase<ButtonProps>
 }
 ```
 
+Story values are serialised into the explorer page and its Controls panel, so don't put live services, connections or secrets in stories.
+
 ### 4. Launch RazorKit
 
 Start your application and navigate to `/razorkit` to view your components. Live editing in the Controls panel needs the site to be served over HTTPS, or from `localhost`.
