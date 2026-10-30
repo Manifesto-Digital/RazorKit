@@ -5,3 +5,22 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # A new release must age a week before a PR is proposed, so a compromised
+    # or yanked release is usually caught before it reaches us.
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      nuget:
+        patterns:
+          - "*"

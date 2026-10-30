@@ -24,6 +24,6 @@ Please include:
 
 ## What to expect
 
-We will acknowledge your report, keep you informed while we investigate, and credit you in the advisory if you wish.
+We aim to acknowledge your report within 5 working days, keep you informed while we investigate, and credit you in the advisory if you wish.
 
 Fixes are disclosed through a GitHub security advisory once consumers have had time to upgrade.
