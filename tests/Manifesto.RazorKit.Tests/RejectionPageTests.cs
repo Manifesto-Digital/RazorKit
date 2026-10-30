@@ -39,6 +39,7 @@ public class RejectionPageTests
         var body = await response.Content.ReadAsStringAsync();
         Assert.StartsWith("<!DOCTYPE html>", body);
         Assert.Contains("<html lang=\"en\">", body);
+        Assert.Contains("<meta name=\"robots\" content=\"noindex\">", body);
         Assert.Contains($"<title>{headline}</title>", body);
         Assert.Contains($"<h1>{headline}</h1>", body);
         Assert.DoesNotContain(Marker, body);

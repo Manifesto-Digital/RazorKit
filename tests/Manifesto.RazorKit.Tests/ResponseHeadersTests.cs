@@ -105,6 +105,21 @@ public class ResponseHeadersTests
         }
     }
 
+    // The X-Robots-Tag header is the primary signal; the meta tag keeps the page unindexable if a
+    // proxy or CDN in front of the host strips response headers.
+    [Theory]
+    [InlineData("/razorkit/button/default")]
+    [InlineData("/razorkit-preview/preview/button/default")]
+    public async Task Html_documents_carry_a_robots_noindex_meta_tag(string path)
+    {
+        await using var host = await TestHost.StartAsync();
+
+        var response = await host.Client.GetAsync(path);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("<meta name=\"robots\" content=\"noindex\">", await response.Content.ReadAsStringAsync());
+    }
+
     [Theory]
     [InlineData("/razorkit/button/default")]
     [InlineData("/razorkit-preview/preview/button/default")]
