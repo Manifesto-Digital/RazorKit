@@ -8,8 +8,10 @@ on:
 permissions:
   contents: read
 
-# Two tags pushed close together must not publish concurrently; queue rather
-# than cancel so a started release is never interrupted half way.
+# Two tags pushed close together must not publish concurrently; a started
+# release is never cancelled half way. GitHub keeps at most one pending run per
+# group, so if a third run queues while one is running and one is pending, the
+# older pending run is cancelled; re-push or re-run that tag if it happens.
 concurrency:
   group: nuget-release
   cancel-in-progress: false
@@ -19,6 +21,7 @@ jobs:
   # build, test), so it must not be able to publish anything.
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
     - name: Checkout
@@ -69,6 +72,27 @@ jobs:
     - name: Pack
       run: dotnet pack Manifesto.RazorKit.csproj --configuration Release --no-build -o ./artifacts
 
+    # The tag==version check runs earlier, but this confirms the file that will
+    # ship carries that version, and the hashes let the environment approver
+    # compare what they are releasing against what the build produced.
+    - name: Verify package and record checksums
+      run: |
+        nupkg="./artifacts/Manifesto.RazorKit.$GITHUB_REF_NAME.nupkg"
+        snupkg="./artifacts/Manifesto.RazorKit.$GITHUB_REF_NAME.snupkg"
+        for f in "$nupkg" "$snupkg"; do
+          if [ ! -f "$f" ]; then
+            echo "::error::Expected package $f was not produced."
+            exit 1
+          fi
+        done
+        {
+          echo "### Package checksums (SHA-256)"
+          echo
+          echo '```'
+          (cd artifacts && sha256sum "$(basename "$nupkg")" "$(basename "$snupkg")")
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+
     - name: Upload package
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
@@ -82,11 +106,17 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment: nuget-release
     permissions:
       id-token: write
 
     steps:
+    - name: Setup .NET
+      uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      with:
+        dotnet-version: 10.0.x
+
     - name: Download package
       uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
       with:
