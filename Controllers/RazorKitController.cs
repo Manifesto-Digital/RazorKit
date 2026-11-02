@@ -347,6 +347,7 @@ public partial class RazorKitController : Controller
 <head>
     <meta charset=""UTF-8"">
     <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+    <meta name=""robots"" content=""noindex"">
     <title>Component Preview</title>
     {cssLink}
     <script src=""{axePath}""></script>

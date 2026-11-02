@@ -68,6 +68,7 @@ internal static class RejectionPage
             <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
+            <meta name="robots" content="noindex">
             <title>{{encodedHeadline}}</title>
             <style>body{margin:0;padding:1.5rem;font:1rem/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#1f2937;background:#fff}h1{margin:0 0 .5rem;font-size:1.125rem}p{margin:0;color:#4b5563}</style>
             </head>
