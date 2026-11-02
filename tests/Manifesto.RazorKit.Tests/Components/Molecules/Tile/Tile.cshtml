@@ -1,0 +1,5 @@
+@model Manifesto.RazorKit.Tests.Components.Molecules.Tile.ITileProps
+<article class="tile"><h3>@Model.Title</h3>@if (Model.Link != null)
+{
+    @await Html.PartialAsync("~/Components/Atoms/Action/Action.cshtml", Model.Link)
+}</article>

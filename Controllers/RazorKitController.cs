@@ -97,6 +97,8 @@ public partial class RazorKitController : Controller
         try
         {
             Dictionary<string, object> propertyValues;
+            ComponentStory? selectedStory = _storyService.GetStoriesForComponent(componentName)
+                .FirstOrDefault(s => s.Name.Equals(storyName, StringComparison.OrdinalIgnoreCase));
 
             // Check if this is a POST with JSON props
             if (!string.IsNullOrEmpty(propsJson))
@@ -105,7 +107,7 @@ public partial class RazorKitController : Controller
                 {
                     // Deserialize the JSON props
                     using var jsonDocument = JsonDocument.Parse(propsJson, PropsJsonDocumentOptions);
-                    propertyValues = DeserializePropsFromJson(jsonDocument.RootElement, propsType);
+                    propertyValues = DeserializePropsFromJson(jsonDocument.RootElement, propsType, selectedStory?.Properties);
                 }
                 catch (JsonException jsonEx)
                 {
@@ -116,9 +118,6 @@ public partial class RazorKitController : Controller
             else
             {
                 // Fall back to story defaults or default values
-                List<ComponentStory> stories = _storyService.GetStoriesForComponent(componentName);
-                ComponentStory? selectedStory = stories.FirstOrDefault(s => s.Name.Equals(storyName, StringComparison.OrdinalIgnoreCase));
-
                 if (selectedStory != null && selectedStory.Properties.Any())
                 {
                     propertyValues = selectedStory.Properties;
@@ -142,7 +141,10 @@ public partial class RazorKitController : Controller
         }
     }
 
-    private Dictionary<string, object> DeserializePropsFromJson(JsonElement jsonElement, Type propsType)
+    // storyValues are the selected story's own values. They are the only source of runtime types for
+    // members declared as an interface, object or base class, and the fallback when a posted value
+    // for such a member cannot be rebuilt.
+    private Dictionary<string, object> DeserializePropsFromJson(JsonElement jsonElement, Type propsType, Dictionary<string, object>? storyValues)
     {
         var propertyValues = new Dictionary<string, object>();
 
@@ -152,6 +154,7 @@ public partial class RazorKitController : Controller
             PropertyNameCaseInsensitive = true,
             Converters = { new InterfaceToConcreteConverter(_registry) }
         };
+        var storyGuidedReader = new StoryGuidedPropsReader(jsonOptions);
 
         try
         {
@@ -172,6 +175,14 @@ public partial class RazorKitController : Controller
                             if (propInfo.PropertyType == typeof(Microsoft.AspNetCore.Html.IHtmlContent))
                             {
                                 value = new Microsoft.AspNetCore.Html.HtmlString(stringValue ?? string.Empty);
+                            }
+                            else if (propInfo.PropertyType.IsAbstract && !propInfo.PropertyType.IsAssignableFrom(typeof(string))
+                                     && storyValues?.GetValueOrDefault(propInfo.Name) is { } guidedStoryValue)
+                            {
+                                // A string can never be the interface or base class the story's value stands in for;
+                                // handing it to the partial fails the whole render, so keep the story's value.
+                                LogPropKeptStoryValue(_logger, propInfo.Name, nameof(NotSupportedException));
+                                value = guidedStoryValue;
                             }
                             else
                             {
@@ -204,16 +215,24 @@ public partial class RazorKitController : Controller
                             break;
                         case JsonValueKind.Array:
                         case JsonValueKind.Object:
-                            // Deserialize complex types using the converter
+                            object? storyValue = storyValues?.GetValueOrDefault(propInfo.Name);
                             try
                             {
-                                value = JsonSerializer.Deserialize(property.Value.GetRawText(), propInfo.PropertyType, jsonOptions);
+                                value = storyGuidedReader.Read(property.Value, propInfo.PropertyType, storyValue);
                             }
-                            catch (JsonException jsonEx)
+                            catch (Exception ex) when (ex is not OperationCanceledException)
                             {
-                                LogPropDeserializeFailed(_logger, property.Name, jsonEx.GetType().Name);
-                                // Continue with other properties
-                                continue;
+                                if (storyValue == null)
+                                {
+                                    LogPropDeserializeFailed(_logger, property.Name, ex.GetType().Name);
+                                    // Continue with other properties
+                                    continue;
+                                }
+
+                                // One unreadable member must not cost the whole render: the story's value is still a
+                                // value the component accepts.
+                                LogPropKeptStoryValue(_logger, propInfo.Name, ex.GetType().Name);
+                                value = storyValue;
                             }
                             break;
                     }
@@ -312,6 +331,9 @@ public partial class RazorKitController : Controller
 
     [LoggerMessage(EventId = 24, Level = LogLevel.Debug, Message = "Property {PropertyName} could not be deserialized and was skipped ({ExceptionType}).")]
     private static partial void LogPropDeserializeFailed(ILogger logger, string propertyName, string exceptionType);
+
+    [LoggerMessage(EventId = 26, Level = LogLevel.Debug, Message = "Property {PropertyName} could not be rebuilt from the posted value, so the story's value was used ({ExceptionType}).")]
+    private static partial void LogPropKeptStoryValue(ILogger logger, string propertyName, string exceptionType);
 
     [LoggerMessage(EventId = 25, Level = LogLevel.Warning, Message = "Preview props could not be fully deserialized ({ExceptionType}).")]
     private static partial void LogPropsDeserializeFailed(ILogger logger, string exceptionType);
