@@ -25,6 +25,7 @@
 - When a preview is refused (for example too many requests), the preview area shows a short readable message.
 - GET previews now count towards the render concurrency limit (MaxConcurrentRenders), and viewport or theme changes with edited values count as renders.
 - RazorKit's page script and styles are now served as package files rather than inline, so a host Content-Security-Policy no longer needs to allow inline script for RazorKit's page (inline styles are still used).
+- RazorKit's HTML pages (explorer, preview and rejection pages) now carry a robots noindex meta tag, so they stay unindexed even if a proxy or CDN strips the X-Robots-Tag header.
 - Fixed: editing a story in the Controls panel (or switching viewport or theme) no longer breaks components whose props are typed as an interface or object.</PackageReleaseNotes>
     <Authors>Manifesto Digital</Authors>
     <Company>Manifesto Digital</Company>
