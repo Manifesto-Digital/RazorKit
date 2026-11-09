@@ -37,6 +37,10 @@ public static class ServiceCollectionExtensions
         // ever writes a data-theme value that passed this check.
         services.AddSingleton(RazorKitThemeSet.Create(options.Themes));
 
+        // Validated and copied here for the same reasons: a bad path stops the host at startup,
+        // and only a path that passed the check is ever written into a page.
+        services.AddSingleton(RazorKitAssetPaths.Create(options));
+
         services.AddSingleton<ResponseHeadersFilter>();
         services.AddSingleton<MethodCheckFilter>();
         services.AddSingleton<RequestProtectionFilter>();

@@ -3,6 +3,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Manifesto.RazorKit.Filters;
+using Manifesto.RazorKit.Helpers;
 using Manifesto.RazorKit.Models;
 using Manifesto.RazorKit.Registry;
 using Manifesto.RazorKit.Services;
@@ -35,6 +36,11 @@ public class RazorKitPageModel : PageModel
 
     // Resolved per request rather than injected: the set is internal, and the constructor is public.
     private RazorKitThemeSet ThemeSet => HttpContext.RequestServices.GetRequiredService<RazorKitThemeSet>();
+
+    private RazorKitAssetPaths AssetPaths => HttpContext.RequestServices.GetRequiredService<RazorKitAssetPaths>();
+
+    // The preview route, as RazorKitController declares it, before the component and story segments.
+    private const string PreviewRoute = "/razorkit-preview/preview";
 
     public RazorKitPageModel(
         ComponentDiscoveryService componentDiscovery,
@@ -124,9 +130,9 @@ public class RazorKitPageModel : PageModel
             var firstComponent = Components.First();
             var firstStory = _storyService.GetStoriesForComponent(firstComponent.Name).FirstOrDefault();
 
-            return Redirect(firstStory != null
+            return Redirect(AppUrl(firstStory != null
                 ? $"/razorkit/{firstComponent.Name.ToLower()}/{firstStory.Name.ToLower()}{RedirectThemeQuery}"
-                : $"/razorkit/{firstComponent.Name.ToLower()}{RedirectThemeQuery}");
+                : $"/razorkit/{firstComponent.Name.ToLower()}{RedirectThemeQuery}"));
         }
 
         SelectedComponent = Components.FirstOrDefault(c => c.Name.Equals(componentName, StringComparison.OrdinalIgnoreCase));
@@ -137,7 +143,7 @@ public class RazorKitPageModel : PageModel
 
             if (string.IsNullOrEmpty(storyName) && stories.Any())
             {
-                return Redirect($"/razorkit/{SelectedComponent.Name.ToLower()}/{stories.First().Name.ToLower()}{RedirectThemeQuery}");
+                return Redirect(AppUrl($"/razorkit/{SelectedComponent.Name.ToLower()}/{stories.First().Name.ToLower()}{RedirectThemeQuery}"));
             }
 
             SelectedStory = stories.FirstOrDefault(s => s.Name.Equals(storyName, StringComparison.OrdinalIgnoreCase));
@@ -166,7 +172,7 @@ public class RazorKitPageModel : PageModel
                 }
             }
 
-            InitialIframeUrl = $"/razorkit-preview/preview/{SelectedComponent.Name.ToLower()}/{SelectedStory?.Name.ToLower() ?? "default"}{ThemeQuery}";
+            InitialIframeUrl = AppUrl($"{PreviewRoute}/{SelectedComponent.Name.ToLower()}/{SelectedStory?.Name.ToLower() ?? "default"}{ThemeQuery}");
         }
 
         RequestToken = Filters.RequestToken.Issue(HttpContext);
@@ -196,11 +202,20 @@ public class RazorKitPageModel : PageModel
     public object CreateDefaultsInstance() => _propertyService.CreateComponentInstance(PropsType!, DefaultValues);
 
     /// <summary>
+    /// An app-relative path ("/x" or "~/x") as a URL under the host's path base. Every URL the
+    /// page writes goes through here, so a site mounted under a sub-path keeps working.
+    /// </summary>
+    public string AppUrl(string appRelativePath) => AppPath.Resolve(Request.PathBase, appRelativePath);
+
+    /// <summary>The site stylesheets the explorer loads before its own, resolved under the path base.</summary>
+    public IEnumerable<string> ExplorerStylesheetUrls => AssetPaths.ExplorerStylesheets.Select(AppUrl);
+
+    /// <summary>
     /// The URL of one of the page's own static files, under the host's path base and versioned
     /// with the package, so the files are found when the site is mounted under a sub-path.
     /// </summary>
     public string AssetUrl(string relativePath) =>
-        $"{Request.PathBase}/_content/Manifesto.RazorKit/{relativePath}?v={AssetVersion}";
+        AppUrl($"/_content/Manifesto.RazorKit/{relativePath}?v={AssetVersion}");
 
     /// <summary>The JSON for the page's data block: the server values the page script reads.</summary>
     public string PageDataJson() => SerializePageData(new RazorKitPageData(
@@ -211,6 +226,7 @@ public class RazorKitPageModel : PageModel
             p => p.Name,
             p => new RazorKitPropertyData(p.IsCollection, p.IsComplexType, p.Type.Name)))
     {
+        PreviewUrl = AppUrl(PreviewRoute),
         // Empty unless there is a choice of themes: with one theme or none the script has nothing to do.
         Themes = ShowThemeSelector ? ThemeNames.ToArray() : Array.Empty<string>(),
         Theme = ShowThemeSelector ? SelectedThemeName : null,
@@ -227,6 +243,12 @@ internal sealed record RazorKitPageData(
     [property: JsonPropertyName("componentPath")] string? ComponentPath,
     [property: JsonPropertyName("properties")] Dictionary<string, RazorKitPropertyData> Properties)
 {
+    /// <summary>
+    /// The preview route under the host's path base; the script appends /{component}/{story}.
+    /// </summary>
+    [JsonPropertyName("previewUrl")]
+    public string PreviewUrl { get; init; } = string.Empty;
+
     /// <summary>The theme names the script accepts from the dropdown or localStorage.</summary>
     [JsonPropertyName("themes")]
     public string[] Themes { get; init; } = Array.Empty<string>();

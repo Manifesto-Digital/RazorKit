@@ -8,8 +8,34 @@ public class RazorKitOptions
     /// <summary>
     /// The name of the component library to use in static file paths (e.g., "MyProjectName.UmbracoComponents")
     /// This is used to construct paths like "/_content/{ComponentLibraryName}/css/main.css"
+    /// when <see cref="PreviewStylesheets"/> or <see cref="PreviewScripts"/> is left null.
     /// </summary>
     public string ComponentLibraryName { get; set; } = string.Empty;
+
+    // The three asset lists below default to null rather than to a filled list. Configuration
+    // binding adds to a list that already has items, so a default of ["/css/main.css"] could
+    // never be replaced from appsettings.json, only appended to.
+
+    /// <summary>
+    /// The site stylesheets the explorer page loads before its own, in order. Null (the default)
+    /// loads "/css/main.css". An empty list loads none. Each entry is an app-relative path,
+    /// "/x" or "~/x", resolved under the host's path base; anything else stops startup.
+    /// </summary>
+    public IList<string>? ExplorerStylesheets { get; set; }
+
+    /// <summary>
+    /// The stylesheets the preview loads, in order. Null (the default) loads
+    /// "/_content/{ComponentLibraryName}/css/main.css", or none when ComponentLibraryName is empty.
+    /// An empty list loads none. Paths follow the same rules as <see cref="ExplorerStylesheets"/>.
+    /// </summary>
+    public IList<string>? PreviewStylesheets { get; set; }
+
+    /// <summary>
+    /// The scripts the preview loads at the end of its body, in order. Null (the default) loads
+    /// "/_content/{ComponentLibraryName}/js/main.js", or none when ComponentLibraryName is empty.
+    /// An empty list loads none. Paths follow the same rules as <see cref="ExplorerStylesheets"/>.
+    /// </summary>
+    public IList<string>? PreviewScripts { get; set; }
 
     /// <summary>
     /// The public origins the explorer is served from, such as "https://www.example.com". RazorKit
