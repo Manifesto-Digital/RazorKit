@@ -1,0 +1,2 @@
+@model Manifesto.RazorKit.Tests.Components.Atoms.Probe.ProbeProps
+<section class="probe" data-root="@(Model.Root?.Name ?? "none")" data-children="@(Model.Root?.Children.Count ?? 0)" data-links="@(Model.Links?.Count() ?? 0)" data-action="@(Model.Action?.Text ?? "none")" data-payload="@(Model.Payload?.GetType().Name ?? "none")"></section>
