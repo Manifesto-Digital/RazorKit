@@ -2,7 +2,10 @@ using Manifesto.RazorKit.Filters;
 using Manifesto.RazorKit.Models;
 using Manifesto.RazorKit.Registry;
 using Manifesto.RazorKit.Services;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Manifesto.RazorKit.Extensions;
@@ -26,6 +29,7 @@ public static class ServiceCollectionExtensions
         }
 
         ValidateRateLimits(options.RateLimit);
+        RazorKitAvailability.Validate(options.EnabledEnvironments);
 
         services.AddSingleton(options);
 
@@ -36,6 +40,13 @@ public static class ServiceCollectionExtensions
         // Validated and copied here: a bad theme stops the host at startup, and the preview only
         // ever writes a data-theme value that passed this check.
         services.AddSingleton(RazorKitThemeSet.Create(options.Themes));
+
+        // Decided once: the environment cannot change while the process runs. The conventions run when
+        // MVC builds its application model, so a disabled RazorKit never gets an endpoint to match.
+        services.AddSingleton(sp => RazorKitAvailability.For(options, sp.GetRequiredService<IHostEnvironment>()));
+        services.AddSingleton(sp => new RazorKitAvailabilityConvention(sp.GetRequiredService<RazorKitAvailability>()));
+        services.AddOptions<MvcOptions>().Configure<RazorKitAvailabilityConvention>((mvc, convention) => mvc.Conventions.Add(convention));
+        services.AddOptions<RazorPagesOptions>().Configure<RazorKitAvailabilityConvention>((pages, convention) => pages.Conventions.Add(convention));
 
         services.AddSingleton<ResponseHeadersFilter>();
         services.AddSingleton<MethodCheckFilter>();

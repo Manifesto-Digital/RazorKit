@@ -206,15 +206,17 @@ Once your components are set up, you can use them in your Umbraco templates:
 
 After setup, navigate to `/razorkit` to access the component preview UI.
 
-> **Tip:** You may want to restrict access to the RazorKit UI in production. Consider using environment checks or authentication middleware.
+RazorKit is public by default. To serve it only in some environments, set `EnabledEnvironments` in your composer; in any other environment every RazorKit URL answers with an ordinary 404:
 
 ```csharp
-// Example: Only enable RazorKit in development
-if (app.Environment.IsDevelopment())
+builder.Services.AddRazorKit(options =>
 {
-    app.MapRazorPages();
-}
+    options.ComponentLibraryName = "YourProject.UmbracoComponents";
+    options.EnabledEnvironments = ["Development", "Staging"];
+});
 ```
+
+Umbraco's basic authentication (`Umbraco:CMS:BasicAuth`) cannot be scoped to a path, so it is not an alternative. See "Where RazorKit is served" in the main README for the details.
 
 ## Troubleshooting
 
