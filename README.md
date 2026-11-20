@@ -209,6 +209,35 @@ builder.Services.AddRazorKit(options =>
 
 The list binds from configuration too, for example `builder.Configuration.GetSection("RazorKit:Themes").Bind(options.Themes)` with entries of `Name` and `DataTheme`.
 
+#### Where RazorKit is served
+
+RazorKit is public by default. Every environment that maps it serves `/razorkit` and `/razorkit-preview` to anyone who can reach the site. That is deliberate, so a component library can be shown on a live site, and the pages are kept out of search indexes by an `X-Robots-Tag: noindex` header and a robots `noindex` meta tag.
+
+To serve it only in some environments, list them in `EnabledEnvironments`:
+
+```csharp
+builder.Services.AddRazorKit(options =>
+{
+    options.ComponentLibraryName = "YourProject.Components";
+    options.EnabledEnvironments = ["Development", "Staging"];
+    // On net8 without C# 12 collection expressions:
+    // options.EnabledEnvironments = new List<string> { "Development", "Staging" };
+});
+```
+
+- Names are matched ignoring case against `IHostEnvironment.EnvironmentName`.
+- Unset (`null`, the default) means every environment, so existing sites are unchanged.
+- An empty list set in code (`options.EnabledEnvironments = []`) means no environment: RazorKit is disabled everywhere.
+- In configuration it is different. `"EnabledEnvironments": []` in `appsettings.json` binds as unset, because the configuration binder cannot tell an empty array from a missing key, so RazorKit stays enabled everywhere. To turn RazorKit off in an environment, list only the environments where it should be served.
+- Route aliases or subclasses of RazorKit's controller that your host adds itself (for example `AddPageRoute("/RazorKit", ...)`) are not covered and are not hidden.
+- A blank or null entry stops the application at startup.
+- In an environment that is not listed, RazorKit's routes are not registered, so `/razorkit`, `/razorkit-preview` and everything beneath them (any method, any casing) get the same 404 as any unknown URL on your site. No RazorKit header, cookie or text is sent, and no rendering, props reading or rate limiting happens. RazorKit logs one Information line at startup saying so, and does not log the `AllowedOrigins` warning.
+- Static assets under `/_content/Manifesto.RazorKit` are still served by the host's static files middleware. They are RazorKit's own `css/razorkit.css`, `js/razorkit.js` and the bundled axe-core accessibility checker in `lib/axe-core` (script, licence and readme files). They contain no component, story or site data.
+
+Umbraco's built-in basic authentication (`Umbraco:CMS:BasicAuth`) cannot do this job: it protects the whole site or the backoffice and has no way to scope itself to a path, so it cannot cover `/razorkit` alone. `EnabledEnvironments` replaces the custom middleware that returns 404 for those paths.
+
+An `Authorize` hook (to require a signed-in user instead of hiding RazorKit) may be added in a later release. It is not available today.
+
 #### Custom Component Discovery
 
 Implement `IComponentDiscovery` to customize how components are discovered:

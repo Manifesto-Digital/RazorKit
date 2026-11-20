@@ -21,6 +21,18 @@ public class RazorKitOptions
     public IList<string> AllowedOrigins { get; set; } = new List<string>();
 
     /// <summary>
+    /// The host environment names (matched ignoring case against <c>IHostEnvironment.EnvironmentName</c>)
+    /// in which RazorKit is served, such as "Development" and "Staging". In any other environment
+    /// RazorKit's routes are not registered at all, so every RazorKit URL answers with the host's
+    /// ordinary 404. Null, the default, serves RazorKit in every environment. An empty list set in code
+    /// disables RazorKit in every environment. Configuration cannot express that: the binder reads an
+    /// empty array in appsettings as unset (null), which enables RazorKit everywhere, so list only the
+    /// environments where it should be served. Entries must not be blank. Route aliases or subclasses
+    /// of RazorKit's controller added by the host are not covered.
+    /// </summary>
+    public IList<string>? EnabledEnvironments { get; set; }
+
+    /// <summary>
     /// The themes the preview can be rendered in; the first is the default. With none, the preview
     /// sets no theme. With one, it is always applied. With two or more, the explorer shows a theme
     /// dropdown.

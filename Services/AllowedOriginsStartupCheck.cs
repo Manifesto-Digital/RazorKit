@@ -12,18 +12,27 @@ namespace Manifesto.RazorKit.Services;
 internal sealed partial class AllowedOriginsStartupCheck : IHostedService
 {
     private readonly RazorKitOptions _options;
+    private readonly RazorKitAvailability _availability;
     private readonly IHostEnvironment _environment;
     private readonly ILogger<AllowedOriginsStartupCheck> _logger;
 
-    public AllowedOriginsStartupCheck(RazorKitOptions options, IHostEnvironment environment, ILogger<AllowedOriginsStartupCheck> logger)
+    public AllowedOriginsStartupCheck(RazorKitOptions options, RazorKitAvailability availability, IHostEnvironment environment, ILogger<AllowedOriginsStartupCheck> logger)
     {
         _options = options;
+        _availability = availability;
         _environment = environment;
         _logger = logger;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
+        // Nothing is served, so the origin check can never run and the warning would be noise.
+        if (!_availability.IsEnabled)
+        {
+            LogDisabled(_logger, _availability.EnvironmentName);
+            return Task.CompletedTask;
+        }
+
         if (!_environment.IsDevelopment() && _options.AllowedOrigins.Count == 0)
         {
             LogAllowedOriginsNotSet(_logger);
@@ -33,6 +42,10 @@ internal sealed partial class AllowedOriginsStartupCheck : IHostedService
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    [LoggerMessage(EventId = 11, Level = LogLevel.Information,
+        Message = "RazorKit is disabled in the '{EnvironmentName}' environment (see EnabledEnvironments). Its routes are not registered.")]
+    private static partial void LogDisabled(ILogger logger, string environmentName);
 
     [LoggerMessage(EventId = 10, Level = LogLevel.Warning,
         Message = "RazorKit AllowedOrigins is not set. Render requests without a Sec-Fetch-Site header are checked against " +
