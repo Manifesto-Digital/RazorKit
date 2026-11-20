@@ -17,6 +17,19 @@ internal sealed class ResponseHeadersAttribute : Attribute, IFilterFactory, IOrd
 
     // GetRequiredService, not ActivatorUtilities: a host that mapped RazorKit but skipped
     // AddRazorKit gets an exception (a 500) instead of a response without these headers.
-    public IFilterMetadata CreateInstance(IServiceProvider serviceProvider) =>
-        serviceProvider.GetRequiredService<ResponseHeadersFilter>();
+    /// <summary>
+    /// For endpoints whose own 200 response never changes for a given URL: lets the action opt in
+    /// (see <see cref="ResponseHeadersFilter.CacheableItemKey"/>) to a year-long private cache
+    /// instead of no-store. Private, so a shared cache that ignores the query string cannot be
+    /// poisoned for every user.
+    /// </summary>
+    public bool ImmutableOnSuccess { get; init; }
+
+    public IFilterMetadata CreateInstance(IServiceProvider serviceProvider)
+    {
+        var shared = serviceProvider.GetRequiredService<ResponseHeadersFilter>();
+        return ImmutableOnSuccess
+            ? new ResponseHeadersFilter { SuccessCacheControl = "private, max-age=31536000, immutable" }
+            : shared;
+    }
 }
