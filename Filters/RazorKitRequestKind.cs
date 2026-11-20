@@ -1,4 +1,6 @@
+using Manifesto.RazorKit.Controllers;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -28,5 +30,12 @@ internal static class RazorKitRequestKind
     /// takes no slot.
     /// </summary>
     public static bool TakesRenderSlot(HttpRequest request, ActionDescriptor descriptor) =>
-        descriptor is not PageActionDescriptor || IsRender(request, descriptor);
+        IsRender(request, descriptor) || (descriptor is not PageActionDescriptor && !IsPlaceholderImage(descriptor));
+
+    // The placeholder controller carries the concurrency filter like every other controller, so
+    // an action added to it later that renders still takes a slot (IsRender catches a non-safe
+    // method). Only its GET image, which runs no component and is cheap, is exempt.
+    private static bool IsPlaceholderImage(ActionDescriptor descriptor) =>
+        descriptor is ControllerActionDescriptor { ControllerTypeInfo: { } type }
+        && type.AsType() == typeof(RazorKitPlaceholderController);
 }
