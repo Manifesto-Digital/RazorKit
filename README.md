@@ -258,6 +258,28 @@ builder.Services.AddRazorKit(options =>
 });
 ```
 
+### Placeholder images
+
+Use RazorKit's own placeholder images in stories instead of third-party placeholder sites such as placehold.co, via.placeholder.com or picsum.photos. A site with a strict `Content-Security-Policy` blocks those hosts unless its `img-src` lists them, whereas RazorKit serves the placeholder from your own origin, so `img-src 'self'` already covers it.
+
+```csharp
+using Manifesto.RazorKit.Models;
+
+CreateStory("default", "Default", "Card with an image", new CardProps
+{
+    ImageUrl = RazorKitPlaceholder.Url(640, 360, "Card image", background: "336699")
+})
+```
+
+`RazorKitPlaceholder.Url(width, height, label, background, foreground)` returns a root-relative URL such as `/razorkit-preview/placeholder/640x360?label=Card%20image&bg=336699`. Only the size is required.
+
+- **Size**: whole pixels, clamped to 16 to 4000 in each direction.
+- **Label**: shown on the image and used as its accessible name. It defaults to the size, for example `640×360`. The helper keeps letters, digits, spaces and `- _ . , : ( )`, removes anything else and cuts the result to 40 characters.
+- **Colours**: `background` and `foreground` take 3 or 6 hex digits, with or without a leading `#`. An invalid value is ignored. Without a foreground, black or white is chosen to contrast with the background.
+- **Path base**: the helper returns a root-relative path without any path base. If your site is mounted under a sub-path, prefix it with `Request.PathBase` (or your own `Url.Content`) wherever you render it.
+
+You can also request the endpoint directly. A malformed size gives a 404, and a label outside the safe characters or longer than 40 characters gives a 400; the helper never produces either. Only GET and HEAD are served. Images are cached by the browser for a year (`private, max-age=31536000, immutable`) because the image depends only on its URL. The header is `private` so that a shared cache or CDN never stores it. Requests are subject to RazorKit's rate limit like the explorer page. Only the image itself gets that header: rate-limited or rejected responses, and any page your host renders in their place, keep `no-store`.
+
 ### Umbraco Integration
 
 For Umbraco CMS projects, see [Umbraco Setup Guide](docs/umbraco-setup.md) for detailed integration instructions.
