@@ -64,7 +64,7 @@ dotnet add package Manifesto.RazorKit
 Or add to your `.csproj`:
 
 ```xml
-<PackageReference Include="Manifesto.RazorKit" Version="0.0.1" />
+<PackageReference Include="Manifesto.RazorKit" Version="0.4.0" />
 ```
 
 ## Quick Start
