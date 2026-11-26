@@ -4,10 +4,14 @@
 
 | Version | Supported |
 | ------- | --------- |
-| 0.2.x   | Yes       |
-| < 0.2.0 | No        |
+| 0.4.x   | Yes       |
+| < 0.4.0 | No        |
 
-Versions older than 0.2.0 are unsupported once 0.2.0 has been released. Please upgrade to the latest 0.2.x release.
+Only the latest minor release is supported while RazorKit is below 1.0. Please upgrade to the latest 0.4.x release.
+
+## Deployment
+
+RazorKit is public by default: any environment that maps it serves `/razorkit` and `/razorkit-preview` to anyone who can reach the site. If it should not be reachable in production, set `RazorKitOptions.EnabledEnvironments` to the environments that should serve it. See "Where RazorKit is served" in the README.
 
 ## Reporting a vulnerability
 

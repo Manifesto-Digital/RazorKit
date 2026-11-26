@@ -73,6 +73,7 @@ public class EnabledEnvironmentsTests
     [InlineData("/razorkit-preview/preview/button")]
     [InlineData("/razorkit-preview/preview/button/default")]
     [InlineData("/RazorKit-Preview/Preview/Button/Default")]
+    [InlineData("/razorkit-preview/placeholder/800x450")]
     public async Task Unlisted_environment_answers_404_on_every_route(string path)
     {
         await using var host = await StartAsync(Environments.Production, "Development", "Staging");
